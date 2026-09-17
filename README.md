@@ -47,4 +47,4 @@ can hand to a coding AI to do the port.
 
 ## Used by
 
-- **ENH Master** - adaptive clarity / footstep enhancer with a two-unit 3D rack UI.
+- [**ENH Master**](https://github.com/thenameiscobmarley/ENH-Master) - adaptive clarity / footstep enhancer with a two-unit 3D rack UI.
