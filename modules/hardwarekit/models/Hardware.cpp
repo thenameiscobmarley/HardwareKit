@@ -31,8 +31,6 @@ namespace hwk::models
         constexpr Vec3 capRed  { 0.46f, 0.11f, 0.09f }, capBlue { 0.16f, 0.25f, 0.44f }, capGreen { 0.16f, 0.32f, 0.22f };
         constexpr Vec3 capYellow { 0.70f, 0.56f, 0.20f }, capWhite { 0.84f, 0.83f, 0.80f }, amber { 0.46f, 0.29f, 0.11f };
         constexpr Vec3 oxblood { 0.36f, 0.08f, 0.10f };
-        // Neve 1073 / Marconi knob plastics
-        constexpr Vec3 marconiGrey { 0.17f, 0.18f, 0.20f }, marconiBlue { 0.075f, 0.11f, 0.19f }, marconiRed { 0.26f, 0.06f, 0.055f };
         constexpr Vec3 white { 0.95f, 0.95f, 0.97f }, ink { 0.02f, 0.02f, 0.02f };
         constexpr Vec3 none {};
 
@@ -92,10 +90,6 @@ namespace hwk::models
             { "Amber instrument",     R::cylinder, 1.00f, 1, darkGrey, false, 0, false, 36, 0.022f, 0.30f, 0, none, false, 0, 0.50f, 3, amber, false, R::line, white },
             { "Oxblood instrument",   R::cylinder, 1.00f, 1, darkGrey, false, 0, false, 36, 0.022f, 0.30f, 0, none, false, 0, 0.50f, 3, oxblood, false, R::line, white },
 
-            // Neve 1073-type Marconi knobs: two-tier moulded body, skirt in the same plastic, white line
-            { "Marconi, grey",        R::stepped,  1.10f, 1, marconiGrey, false, 0, false, 0, 0, 0, 1.30f, marconiGrey, false, 0, 0.0f, 0, none, false, R::skirtLine, white },
-            { "Marconi, blue",        R::stepped,  1.10f, 1, marconiBlue, false, 0, false, 0, 0, 0, 1.30f, marconiBlue, false, 0, 0.0f, 0, none, false, R::skirtLine, white },
-            { "Marconi, red",         R::stepped,  1.10f, 1, marconiRed, false, 0, false, 0, 0, 0, 1.30f, marconiRed, false, 0, 0.0f, 0, none, false, R::skirtLine, white },
         };
         static_assert (sizeof (recipes) / sizeof (recipes[0]) == (size_t) KnobStyle::count - (size_t) KnobStyle::consoleAccent,
                        "one recipe per recipe style");
@@ -118,6 +112,7 @@ namespace hwk::models
             case KnobStyle::softTouch:   return "Soft touch";
             case KnobStyle::jewelCap:    return "Jewel cap";
             case KnobStyle::skirted:     return "Skirted";
+            case KnobStyle::chickenHeadKnob: return "Chicken head, knob";
             default:                     break;
         }
         if (auto* r = recipeFor (s))
@@ -342,22 +337,19 @@ namespace hwk::models
             }
 
             case KnobStyle::chickenHead:
+            case KnobStyle::chickenHeadKnob:
             {
+                // Black bakelite: a round back end that tapers to a pointed beak, white inlay along it.
+                // As a selector the beak reaches out over the positions; as a knob it stops at the ticks.
                 const float top = r * 0.95f;
+                const float beak = style == KnobStyle::chickenHeadKnob ? 1.26f : 1.55f;
                 m.parts.push_back ({ lathe (r * 0.95f, { { 0.0f, 0.0f }, { 0.0f, 0.03f }, { -0.012f, 0.045f } }, seg, true),
                                      Role::body, true, { 0.035f, 0.030f, 0.028f } });
-                m.parts.push_back ({ geo::pointerPlate (r * 1.55f, r * 0.55f, r * 0.42f, 0.04f, top), Role::body, true, { 0.035f, 0.030f, 0.028f } });
-                m.parts.push_back ({ geo::box ({ -0.006f, top - 0.0005f, -(r * 1.45f) }, { 0.006f, top + 0.003f, -r * 0.1f }), Role::pointer, true, { 0.96f, 0.94f, 0.88f } });
-                if (carved)   // a polished screw cap in the middle of the bakelite
-                {
-                    Part cap { lathe (r * 0.22f, { { 0.0f, top }, { 0.0f, top + 0.004f }, { -0.006f, top + 0.007f } }, seg / 2, true),
-                               Role::metal, true, { 0.80f, 0.78f, 0.74f } };
-                    cap.polish = 0.8f;
-                    m.parts.push_back (std::move (cap));
-                }
-                m.footprintRadius = r * 1.6f;
+                m.parts.push_back ({ geo::pointerPlate (r * beak, r * 0.55f, r * 0.42f, 0.04f, top), Role::body, true, { 0.035f, 0.030f, 0.028f } });
+                m.parts.push_back ({ geo::box ({ -0.006f, top - 0.0005f, -(r * (beak - 0.10f)) }, { 0.006f, top + 0.003f, -r * 0.1f }), Role::pointer, true, { 0.96f, 0.94f, 0.88f } });
+                m.footprintRadius = r * (beak + 0.05f);
                 m.shadowRadius = r * 0.98f;        // the body; the beak casts its own, turning shadow
-                m.beakLength = r * 1.50f;
+                m.beakLength = r * (beak - 0.05f);
                 m.beakHalfWidth = r * 0.42f;
                 m.height = top;
                 break;

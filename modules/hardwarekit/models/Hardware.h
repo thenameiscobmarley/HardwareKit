@@ -65,6 +65,7 @@ namespace hwk::models
         softTouch,    // grey soft-touch rubber with a coloured cap (console style)
         jewelCap,     // black body with a polished metal cap and a coloured jewel centre
         skirted,      // outboard-gear type: black cone on a machined metal skirt, white pointer
+        chickenHeadKnob, // the same black bakelite chicken head, its beak ending at a knob's printed ticks
 
         // Recipe styles (see knobRecipe): console, vintage, machined, instrument, hi-fi, guitar
         consoleAccent, consoleRed, consoleBlue, consoleGreen, consoleYellow, consoleWhite, consoleLow,
@@ -74,7 +75,6 @@ namespace hwk::models
         pointerBarBlack, pointerBarSilver, milSpecPointer,
         hifiDisc, hifiBlackDisc, hifiDimple, gunmetalCap,
         guitarTopHat, guitarSpeed, guitarDome, amberInstrument, oxbloodInstrument,
-        marconiGrey, marconiBlue, marconiRed,   // Neve 1073-type
         count
     };
 
