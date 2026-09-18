@@ -72,6 +72,15 @@ float rrectSdf (vec2 p, vec2 halfSize, float r)
     return length (max (q, 0.0)) + min (max (q.x, q.y), 0.0) - r;
 }
 
+/*  Anti-aliasing for per-cell noise (hash12 (floor (x))): when a pixel covers n cells, what it
+    should show is their average, whose spread shrinks as 1 / sqrt (n). Sampling one cell per pixel
+    instead gives full-contrast noise that crawls as the camera moves. `cells` is the noise
+    coordinate's per-pixel change, e.g. fwidth (p * 3000.0). */
+float noiseAA (float cells)
+{
+    return inversesqrt (max (1.0, cells));
+}
+
 float hash12 (vec2 p)
 {
     vec3 p3 = fract (vec3 (p.xyx) * 0.1031);
@@ -194,7 +203,8 @@ void main()
     namespace library
     {
         const Material powderCoat { "powderCoat", R"GLSL(
-    float grain = hash12 (floor (vWorld.xz * 900.0 + vWorld.y * 700.0)) - 0.5;
+    vec2 grainAt = vWorld.xz * 900.0 + vWorld.y * 700.0;
+    float grain = (hash12 (floor (grainAt)) - 0.5) * noiseAA (length (fwidth (grainAt)));
     float aged = patina (vWorld.xy * 2.2 + vWorld.z * 0.3);
     vec3 albedo = uBaseColor * (1.0 + grain * 0.10) * (0.92 + 0.14 * aged);
     col  = albedo * (amb * 0.55 + wrap * lightCol * 0.70 + fill);
@@ -205,7 +215,7 @@ void main()
         const Material anodisedPanel { "anodisedPanel", R"GLSL(
     vec2 p = vLocal.xz;
     vec4 d = texture (uTex, (p - uParams.xy) / uParams.zw);
-    float brush = hash12 (vec2 (floor (p.y * 2600.0), floor (p.x * 40.0))) - 0.5;
+    float brush = (hash12 (vec2 (floor (p.y * 2600.0), floor (p.x * 40.0))) - 0.5) * noiseAA (fwidth (p.y * 2600.0));
     vec3 panel = vec3 (0.085, 0.089, 0.098) * (1.0 + brush * 0.10);
     panel = mix (panel, vec3 (0.118, 0.123, 0.134), d.b * 0.85);
     vec3 albedo = mix (panel, vec3 (0.46, 0.48, 0.52), d.g);
@@ -224,7 +234,7 @@ void main()
         const Material lacquerPanel { "lacquerPanel", R"GLSL(
     vec2 p = vLocal.xz;
     float print = texture (uTex, (p - uParams.xy) / uParams.zw).r;
-    float flake = hash12 (floor (p * 1400.0)) - 0.5;
+    float flake = (hash12 (floor (p * 1400.0)) - 0.5) * noiseAA (length (fwidth (p * 1400.0)));
     vec3 albedo = mix (uBaseColor * (1.0 + flake * 0.06), vec3 (0.93, 0.92, 0.95), print);
     float wear = wearMarks (p, uParams2.w + 3.0, 1.0);
     float dust = patina (p * 3.0) * 0.5 + 0.5;
@@ -255,7 +265,17 @@ void main()
         const Material plastic { "plastic", R"GLSL(
     float shade = 1.0;
     if (uParams.x > 0.0 && vLocal.y < uParams.y && vLocal.y > 0.02)
-        shade = 0.35 + 0.65 * smoothstep (-0.6, 0.6, sin (atan (vLocal.x, vLocal.z) * uParams.x));
+    {
+        // Grip ridges, anti-aliased: the ridge phase's change per pixel (from the radius, not from
+        // atan, which jumps at its seam) widens the edge, and ridges finer than ~a pixel fade to
+        // their average instead of stair-stepping into moire.
+        float radius = max (length (vLocal.xz), 1.0e-4);
+        float perPixel = uParams.x * length (fwidth (vLocal.xz)) / radius;
+        float soft = 0.6 + perPixel;
+        float ridge = smoothstep (-soft, soft, sin (atan (vLocal.x, vLocal.z) * uParams.x));
+        ridge = mix (0.5, ridge, clamp (1.6 - perPixel * 0.55, 0.0, 1.0));
+        shade = 0.35 + 0.65 * ridge;
+    }
     col  = uBaseColor * (amb * 0.60 + wrap * lightCol * 0.80 + fill);
     col += lightCol * (pow (ndh, 50.0) * 0.28 + pow (ndh, 8.0) * 0.05) * shade;
     col += envColor (R) * (0.04 + 0.20 * pow (facing, 4.0)) * shade;
@@ -362,8 +382,8 @@ void main()
     float print = texture (uTex, (p - uParams.xy) / uParams.zw).r;
 
     // Horizontal brush, fine and directional, with a slow variation across the plate
-    float brush = (hash12 (vec2 (floor (p.y * 3000.0), floor (p.x * 26.0))) - 0.5)
-                + (hash12 (vec2 (floor (p.y * 700.0), floor (p.x * 9.0))) - 0.5) * 0.6;
+    float brush = (hash12 (vec2 (floor (p.y * 3000.0), floor (p.x * 26.0))) - 0.5) * noiseAA (fwidth (p.y * 3000.0))
+                + (hash12 (vec2 (floor (p.y * 700.0), floor (p.x * 9.0))) - 0.5) * 0.6 * noiseAA (fwidth (p.y * 700.0));
     float wear = wearMarks (p, uParams2.w + 7.0, 1.0);
     float aged = patina (p * 2.4);
 

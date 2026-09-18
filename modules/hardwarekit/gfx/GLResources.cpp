@@ -220,16 +220,24 @@ namespace hwk::gfx
     }
 
     //==============================================================================
-    bool RenderTarget::ensureSize (int width, int height)
+    bool RenderTarget::ensureSize (int width, int height, int samples)
     {
         width = std::max (1, width);
         height = std::max (1, height);
-        if (fbo != 0 && width == w && height == h)
+        if (samples > 1)
+        {
+            GLint maxSamples = 1;
+            glGetIntegerv (GL_MAX_SAMPLES, &maxSamples);
+            samples = std::min (samples, (int) maxSamples);
+        }
+        samples = samples > 1 ? samples : 0;
+        if (fbo != 0 && width == w && height == h && samples == sampleCount)
             return complete;
 
         release();
         w = width;
         h = height;
+        sampleCount = samples;
 
         glGenTextures (1, &colour);
         glBindTexture (GL_TEXTURE_2D, colour);
@@ -248,13 +256,50 @@ namespace hwk::gfx
         glFramebufferTexture2D (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, colour, 0);
         glFramebufferRenderbuffer (GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth);
         complete = glCheckFramebufferStatus (GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE;
+
+        if (complete && sampleCount > 1)
+        {
+            glGenRenderbuffers (1, &msColour);
+            glBindRenderbuffer (GL_RENDERBUFFER, msColour);
+            glRenderbufferStorageMultisample (GL_RENDERBUFFER, sampleCount, GL_RGBA8, w, h);
+            glGenRenderbuffers (1, &msDepth);
+            glBindRenderbuffer (GL_RENDERBUFFER, msDepth);
+            glRenderbufferStorageMultisample (GL_RENDERBUFFER, sampleCount, GL_DEPTH_COMPONENT24, w, h);
+
+            glGenFramebuffers (1, &msFbo);
+            glBindFramebuffer (GL_FRAMEBUFFER, msFbo);
+            glFramebufferRenderbuffer (GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, msColour);
+            glFramebufferRenderbuffer (GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, msDepth);
+
+            // No multisampling to be had: fall back to the plain target rather than fail
+            if (glCheckFramebufferStatus (GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+            {
+                glDeleteFramebuffers (1, &msFbo);
+                glDeleteRenderbuffers (1, &msColour);
+                glDeleteRenderbuffers (1, &msDepth);
+                msFbo = msColour = msDepth = 0;
+                sampleCount = 0;
+            }
+        }
+
         unbind();
         return complete;
     }
 
+    void RenderTarget::resolve() const
+    {
+        if (msFbo == 0)
+            return;
+
+        glBindFramebuffer (GL_READ_FRAMEBUFFER, msFbo);
+        glBindFramebuffer (GL_DRAW_FRAMEBUFFER, fbo);
+        glBlitFramebuffer (0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        unbind();
+    }
+
     void RenderTarget::bind() const
     {
-        glBindFramebuffer (GL_FRAMEBUFFER, fbo);
+        glBindFramebuffer (GL_FRAMEBUFFER, msFbo != 0 ? msFbo : fbo);
         glViewport (0, 0, w, h);
     }
 
@@ -279,7 +324,11 @@ namespace hwk::gfx
         if (fbo != 0)    glDeleteFramebuffers (1, &fbo);
         if (depth != 0)  glDeleteRenderbuffers (1, &depth);
         if (colour != 0) glDeleteTextures (1, &colour);
-        fbo = depth = colour = 0;
+        if (msFbo != 0)    glDeleteFramebuffers (1, &msFbo);
+        if (msColour != 0) glDeleteRenderbuffers (1, &msColour);
+        if (msDepth != 0)  glDeleteRenderbuffers (1, &msDepth);
+        fbo = depth = colour = msFbo = msColour = msDepth = 0;
+        sampleCount = 0;
         complete = false;
     }
 }

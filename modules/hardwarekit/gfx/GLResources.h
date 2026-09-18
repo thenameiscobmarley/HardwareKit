@@ -100,9 +100,14 @@ namespace hwk::gfx
     public:
         ~RenderTarget() { jassert (fbo == 0); }
 
-        /** (Re)allocates when the size changes. Returns false if the framebuffer is incomplete. */
-        bool ensureSize (int width, int height);
+        /** (Re)allocates when the size or sample count changes. samples > 1: the scene is drawn into a
+            multisampled buffer (anti-aliased like the main framebuffer), and resolve() averages it into
+            the texture bindColour() reads. Returns false if the framebuffer is incomplete. */
+        bool ensureSize (int width, int height, int samples = 0);
         void bind() const;
+        /** Multisampled targets: average the samples into the colour texture. Call after drawing,
+            before bindColour(); a no-op without multisampling. Leaves no framebuffer bound. */
+        void resolve() const;
         static void unbind();
         void bindColour (int unit) const;
         void release();
@@ -113,7 +118,8 @@ namespace hwk::gfx
 
     private:
         GLuint fbo = 0, colour = 0, depth = 0;
-        int w = 0, h = 0;
+        GLuint msFbo = 0, msColour = 0, msDepth = 0;   // multisampled draw buffer (samples > 1)
+        int w = 0, h = 0, sampleCount = 0;
         bool complete = false;
     };
 }
