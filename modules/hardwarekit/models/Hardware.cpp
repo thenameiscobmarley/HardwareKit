@@ -4,6 +4,101 @@ namespace hwk::models
     using geo::sweptRoundedRect;
     using gfx::Mat4;
 
+    //==============================================================================
+    namespace
+    {
+        /** One recipe style: skirt, body, grip, cap, pointer - everything in multiples of the knob radius
+            r unless marked as an absolute size. */
+        struct KnobRecipe
+        {
+            const char* name;
+            enum Shape { cylinder, taper, cone, dome, barrel, collet, stepped, disc } shape;
+            float height;                    // body height (x r)
+            float topR;                      // taper / cone: top radius (x r)
+            Vec3 bodyColour; bool bodyMetal; float polish; bool brushed;
+            int ribs; float ribDepth; float ribSharp;                 // grip carving (0 ribs = smooth)
+            float skirtR; Vec3 skirtColour; bool skirtMetal; int skirtKnurl;   // skirt (0 = none)
+            float capR; int capMaterial; Vec3 capColour; bool capDome;        // cap: 0 plastic, 1 metal, 2 unit accent (anodised), 3 fixed colour metal
+            enum Pointer { line, dot, notch, bar, skirtLine, wing } pointer;
+            Vec3 pointerColour;
+        };
+
+        constexpr Vec3 black   { 0.030f, 0.030f, 0.033f }, darkGrey { 0.10f, 0.10f, 0.11f }, grey { 0.30f, 0.31f, 0.33f };
+        constexpr Vec3 cream   { 0.80f, 0.76f, 0.66f }, bakelite { 0.11f, 0.058f, 0.032f }, rubber { 0.075f, 0.075f, 0.08f };
+        constexpr Vec3 alu     { 0.80f, 0.80f, 0.82f }, nickel { 0.70f, 0.70f, 0.72f }, gunmetal { 0.36f, 0.37f, 0.40f };
+        constexpr Vec3 brass   { 0.78f, 0.62f, 0.34f }, anodBlack { 0.085f, 0.085f, 0.095f }, chromeC { 0.86f, 0.86f, 0.88f };
+        constexpr Vec3 capRed  { 0.62f, 0.10f, 0.08f }, capBlue { 0.14f, 0.26f, 0.55f }, capGreen { 0.14f, 0.40f, 0.22f };
+        constexpr Vec3 capYellow { 0.82f, 0.64f, 0.14f }, capWhite { 0.90f, 0.90f, 0.88f }, amber { 0.52f, 0.31f, 0.10f };
+        constexpr Vec3 oxblood { 0.42f, 0.08f, 0.12f };
+        constexpr Vec3 white { 0.95f, 0.95f, 0.97f }, ink { 0.02f, 0.02f, 0.02f };
+        constexpr Vec3 none {};
+
+        using R = KnobRecipe;
+        const KnobRecipe recipes[] {
+            // Console: grey collet bodies with coloured caps
+            { "Console, unit colour", R::cylinder, 1.05f, 1, grey, false, 0, false, 36, 0.020f, 0.30f, 0, none, false, 0, 0.72f, 2, none, false, R::line, white },
+            { "Console, red cap",     R::cylinder, 1.05f, 1, grey, false, 0, false, 36, 0.020f, 0.30f, 0, none, false, 0, 0.72f, 3, capRed, false, R::line, white },
+            { "Console, blue cap",    R::cylinder, 1.05f, 1, grey, false, 0, false, 36, 0.020f, 0.30f, 0, none, false, 0, 0.72f, 3, capBlue, false, R::line, white },
+            { "Console, green cap",   R::cylinder, 1.05f, 1, grey, false, 0, false, 36, 0.020f, 0.30f, 0, none, false, 0, 0.72f, 3, capGreen, false, R::line, white },
+            { "Console, yellow cap",  R::cylinder, 1.05f, 1, grey, false, 0, false, 36, 0.020f, 0.30f, 0, none, false, 0, 0.72f, 3, capYellow, false, R::line, ink },
+            { "Console, white cap",   R::cylinder, 1.05f, 1, darkGrey, false, 0, false, 36, 0.020f, 0.30f, 0, none, false, 0, 0.72f, 3, capWhite, false, R::line, ink },
+            { "Console, low",         R::disc,     0.55f, 1, grey, false, 0, false, 48, 0.018f, 0.50f, 0, none, false, 0, 0.55f, 2, none, false, R::dot, white },
+
+            // Vintage
+            { "Marconi stepped",      R::stepped,  1.10f, 1, black, false, 0, false, 0, 0, 0, 1.30f, alu, true, 0, 0.0f, 0, none, false, R::skirtLine, white },
+            { "Bakelite pointer",     R::cylinder, 0.85f, 1, bakelite, false, 0, false, 0, 0, 0, 0, none, false, 0, 0.0f, 0, none, false, R::bar, cream },
+            { "Cream radio",          R::dome,     0.95f, 1, cream, false, 0, false, 24, 0.045f, 0.10f, 0, none, false, 0, 0.0f, 0, none, false, R::dot, bakelite },
+            { "Bakelite fluted",      R::taper,    1.15f, 0.80f, bakelite, false, 0, false, 20, 0.070f, 0.10f, 0, none, false, 0, 0.0f, 0, none, false, R::line, cream },
+            { "Cone on chrome skirt", R::cone,     1.05f, 0.45f, black, false, 0, false, 0, 0, 0, 1.40f, chromeC, true, 0, 0.0f, 0, none, false, R::skirtLine, white },
+            { "Wing pointer",         R::dome,     0.80f, 1, black, false, 0, false, 0, 0, 0, 0, none, false, 0, 0.0f, 0, none, false, R::wing, white },
+            { "Broadcast, brass cap", R::barrel,   1.10f, 1, black, false, 0, false, 30, 0.030f, 0.40f, 0, none, false, 0, 0.62f, 3, brass, false, R::line, ink },
+            { "Davies small",         R::taper,    1.20f, 0.82f, black, false, 0, false, 16, 0.080f, 0.12f, 1.25f, black, false, 0, 0.0f, 0, none, false, R::line, white },
+
+            // Machined metal
+            { "Machined silver",      R::cylinder, 0.95f, 1, alu, true, 0.45f, true, 72, 0.022f, 0.90f, 0, none, false, 0, 0.0f, 0, none, false, R::notch, ink },
+            { "Machined black",       R::cylinder, 0.95f, 1, anodBlack, true, 0.40f, true, 72, 0.022f, 0.90f, 0, none, false, 0, 0.0f, 0, none, false, R::line, white },
+            { "Machined gunmetal",    R::cylinder, 0.95f, 1, gunmetal, true, 0.45f, true, 60, 0.022f, 0.90f, 0, none, false, 0, 0.55f, 2, none, false, R::line, white },
+            { "Brass knurl",          R::cylinder, 0.90f, 1, brass, true, 0.55f, true, 64, 0.024f, 0.90f, 0, none, false, 0, 0.0f, 0, none, false, R::dot, ink },
+            { "Crosshatch silver",    R::barrel,   1.00f, 1, nickel, true, 0.50f, true, 96, 0.018f, 1.00f, 0, none, false, 0, 0.0f, 0, none, false, R::notch, ink },
+            { "Stepped aluminium",    R::stepped,  1.05f, 1, alu, true, 0.50f, true, 0, 0, 0, 0, none, false, 0, 0.0f, 0, none, false, R::line, ink },
+            { "Chrome dome",          R::dome,     0.90f, 1, chromeC, true, 0.90f, false, 0, 0, 0, 0, none, false, 0, 0.0f, 0, none, false, R::notch, ink },
+
+            // Instrument collets and Eurorack
+            { "Collet, black",        R::collet,   1.30f, 1, black, false, 0, false, 24, 0.030f, 0.30f, 0, none, false, 0, 0.60f, 2, none, false, R::line, white },
+            { "Collet, grey",         R::collet,   1.30f, 1, grey, false, 0, false, 24, 0.030f, 0.30f, 0, none, false, 0, 0.60f, 3, capRed, false, R::line, white },
+            { "Collet, cream",        R::collet,   1.30f, 1, cream, false, 0, false, 24, 0.030f, 0.30f, 0, none, false, 0, 0.60f, 3, capBlue, false, R::line, white },
+            { "Rogan",                R::taper,    1.10f, 0.72f, black, false, 0, false, 32, 0.035f, 0.35f, 0, none, false, 0, 0.0f, 0, none, false, R::line, white },
+            { "Rogan with skirt",     R::taper,    1.10f, 0.72f, black, false, 0, false, 32, 0.035f, 0.35f, 1.28f, black, false, 0, 0.0f, 0, none, false, R::skirtLine, white },
+            { "Rubber, tall",         R::taper,    1.25f, 0.85f, rubber, false, 0, false, 60, 0.015f, 0.40f, 0, none, false, 0, 0.0f, 0, none, false, R::line, white },
+            { "Rubber, low",          R::disc,     0.60f, 1, rubber, false, 0, false, 60, 0.015f, 0.40f, 0, none, false, 0, 0.0f, 0, none, false, R::dot, white },
+            { "Rubber, ribbed",       R::barrel,   1.00f, 1, rubber, false, 0, false, 18, 0.060f, 0.20f, 0, none, false, 0, 0.0f, 0, none, false, R::line, white },
+            { "Pointer bar, black",   R::cylinder, 0.80f, 1, black, false, 0, false, 0, 0, 0, 0, none, false, 0, 0.0f, 0, none, false, R::bar, white },
+            { "Pointer bar, silver",  R::cylinder, 0.80f, 1, alu, true, 0.55f, true, 0, 0, 0, 0, none, false, 0, 0.0f, 0, none, false, R::bar, ink },
+            { "Mil-spec pointer",     R::cylinder, 0.85f, 1, anodBlack, true, 0.30f, false, 0, 0, 0, 1.20f, nickel, true, 36, 0.0f, 0, none, false, R::bar, white },
+
+            // Hi-fi
+            { "Hi-fi disc",           R::disc,     0.50f, 1, alu, true, 0.55f, true, 0, 0, 0, 0, none, false, 0, 0.0f, 0, none, false, R::dot, ink },
+            { "Hi-fi black disc",     R::disc,     0.50f, 1, anodBlack, true, 0.45f, true, 90, 0.012f, 1.00f, 0, none, false, 0, 0.0f, 0, none, false, R::line, white },
+            { "Hi-fi dimple",         R::disc,     0.55f, 1, nickel, true, 0.60f, true, 0, 0, 0, 0, none, false, 0, 0.42f, 1, gunmetal, false, R::dot, ink },
+            { "Gunmetal, anodised cap", R::taper,  1.00f, 0.90f, gunmetal, true, 0.40f, true, 0, 0, 0, 0, none, false, 0, 0.70f, 2, none, false, R::line, white },
+
+            // Guitar and colour
+            { "Top-hat",              R::cylinder, 0.90f, 1, cream, false, 0, false, 30, 0.020f, 0.30f, 1.35f, cream, false, 0, 0.0f, 0, none, false, R::skirtLine, ink },
+            { "Speed knob",           R::barrel,   1.15f, 1, black, false, 0, false, 40, 0.025f, 0.60f, 0, none, false, 0, 0.0f, 0, none, false, R::dot, white },
+            { "Guitar dome",          R::dome,     1.00f, 1, black, false, 0, false, 28, 0.030f, 0.30f, 0, none, false, 0, 0.48f, 1, chromeC, true, R::line, white },
+            { "Amber instrument",     R::cylinder, 1.00f, 1, darkGrey, false, 0, false, 36, 0.022f, 0.30f, 0, none, false, 0, 0.72f, 3, amber, false, R::line, white },
+            { "Oxblood instrument",   R::cylinder, 1.00f, 1, darkGrey, false, 0, false, 36, 0.022f, 0.30f, 0, none, false, 0, 0.72f, 3, oxblood, false, R::line, white },
+        };
+        static_assert (sizeof (recipes) / sizeof (recipes[0]) == (size_t) KnobStyle::count - (size_t) KnobStyle::consoleAccent,
+                       "one recipe per recipe style");
+
+        const KnobRecipe* recipeFor (KnobStyle s) noexcept
+        {
+            const int i = (int) s - (int) KnobStyle::consoleAccent;
+            return i >= 0 && i < (int) (sizeof (recipes) / sizeof (recipes[0])) ? &recipes[i] : nullptr;
+        }
+    }
+
     const char* knobStyleName (KnobStyle s) noexcept
     {
         switch (s)
@@ -15,7 +110,10 @@ namespace hwk::models
             case KnobStyle::softTouch:   return "Soft touch";
             case KnobStyle::jewelCap:    return "Jewel cap";
             case KnobStyle::skirted:     return "Skirted";
+            default:                     break;
         }
+        if (auto* r = recipeFor (s))
+            return r->name;
         return "Knob";
     }
 
@@ -28,6 +126,149 @@ namespace hwk::models
     {
         constexpr int around[numDetailLevels] { 32, 64, 128, 256 };
         return around[std::clamp (detail, 0, numDetailLevels - 1)];
+    }
+
+
+    /** Builds a recipe style (see the table above). */
+    static Model recipeKnob (const KnobRecipe& k, float r, Vec3 accent, int detail)
+    {
+        using geo::lathe;
+        using geo::Relief;
+        Model m;
+        const int seg = segmentsFor (detail);
+        const bool carved = detail >= 2;
+        const float skirtH = k.skirtR > 0.0f ? 0.016f : 0.0f;
+        const float h = k.height * r;
+        const float c = std::min (0.012f, 0.15f * r);
+        const float y0 = skirtH;
+
+        // Body profile (outset from r, y)
+        std::vector<ProfilePoint> prof;
+        float bandFrom = y0 + 0.12f * h, bandTo = y0 + h - c - 0.004f;
+        switch (k.shape)
+        {
+            case KnobRecipe::cylinder: prof = { { 0, y0 }, { 0, y0 + h - c }, { -c * 0.4f, y0 + h - c * 0.35f }, { -c, y0 + h } }; break;
+            case KnobRecipe::taper:
+            case KnobRecipe::cone:
+            {
+                const float t = (k.topR - 1.0f) * r;
+                prof = { { 0, y0 }, { 0, y0 + 0.08f * h }, { t, y0 + h - c }, { t - c * 0.5f, y0 + h - c * 0.3f }, { t - c, y0 + h } };
+                break;
+            }
+            case KnobRecipe::dome:
+            {
+                prof = { { 0, y0 }, { 0, y0 + 0.40f * h } };
+                for (int i = 1; i <= 8; ++i)
+                {
+                    const float a = 0.5f * geo::kPi * (float) i / 8.0f;
+                    prof.push_back ({ -r * 0.92f * (1.0f - std::cos (a)), y0 + 0.40f * h + 0.60f * h * std::sin (a) });
+                }
+                bandTo = y0 + 0.40f * h;
+                break;
+            }
+            case KnobRecipe::barrel: prof = { { 0, y0 }, { 0.00f, y0 + 0.12f * h }, { 0.035f * r, y0 + 0.50f * h }, { 0.0f, y0 + 0.88f * h }, { -c, y0 + h } }; break;
+            case KnobRecipe::collet:
+                prof = { { 0.10f * r, y0 }, { 0.10f * r, y0 + 0.14f * h }, { -0.22f * r, y0 + 0.20f * h }, { -0.22f * r, y0 + h - c }, { -0.22f * r - c, y0 + h } };
+                bandFrom = y0 + 0.24f * h;
+                break;
+            case KnobRecipe::stepped:
+                prof = { { 0, y0 }, { 0, y0 + 0.38f * h }, { -0.28f * r, y0 + 0.44f * h }, { -0.28f * r, y0 + h - c }, { -0.28f * r - c, y0 + h } };
+                bandFrom = y0 + 0.46f * h;
+                break;
+            case KnobRecipe::disc: prof = { { 0, y0 }, { 0, y0 + h - c }, { -c, y0 + h } }; break;
+        }
+
+        const float topY = prof.back().y;
+        const float topR = r + prof.back().outset;
+
+        Relief grip;
+        if (carved && k.ribs > 0)
+            grip = { k.ribs, k.ribDepth, bandFrom, std::max (bandFrom + 0.005f, bandTo), 0.004f, k.ribSharp };
+
+        if (k.skirtR > 0.0f)
+        {
+            Relief knurl;
+            if (carved && k.skirtKnurl > 0)
+                knurl = { k.skirtKnurl, 0.012f, 0.003f, skirtH - 0.003f, 0.002f, 0.9f };
+            Part skirt { lathe (k.skirtR * r, { { 0.0f, 0.0f }, { 0.0f, skirtH - 0.004f }, { -0.003f, skirtH }, { -(k.skirtR - 1.0f) * r, skirtH } }, seg, false, knurl),
+                         k.skirtMetal ? Role::metal : Role::body, true, k.skirtColour };
+            skirt.polish = 0.5f;
+            skirt.brushedRings = k.skirtMetal;
+            m.parts.push_back (std::move (skirt));
+        }
+
+        Part body { lathe (r, prof, seg, true, grip), k.bodyMetal ? Role::metal : Role::body, true, k.bodyColour };
+        body.polish = k.polish;
+        body.brushedRings = k.brushed;
+        if (! carved && k.ribs > 0 && ! k.bodyMetal)
+        {
+            body.ridges = (float) k.ribs;
+            body.ridgesBelowY = bandTo;
+        }
+        m.parts.push_back (std::move (body));
+
+        // Cap
+        float capTop = topY;
+        if (k.capR > 0.0f)
+        {
+            const float cr = std::min (k.capR * r, topR - 0.003f);
+            const Vec3 colour = k.capMaterial == 2 ? accent : k.capColour;
+            std::vector<ProfilePoint> cp = k.capDome ? std::vector<ProfilePoint> { { 0.0f, topY - 0.003f }, { 0.0f, topY + 0.002f }, { -cr * 0.3f, topY + 0.006f }, { -cr * 0.7f, topY + 0.008f } }
+                                                     : std::vector<ProfilePoint> { { 0.0f, topY - 0.003f }, { 0.0f, topY + 0.0025f }, { -0.0025f, topY + 0.0045f } };
+            // 0: plastic like the body, 1: polished metal, 2: anodised in the unit's colour, 3: coloured plastic (console caps)
+            const bool metal = k.capMaterial == 1 || k.capMaterial == 2;
+            Part cap { lathe (cr, cp, seg, true), metal ? Role::metal : Role::body, true, k.capMaterial == 0 ? k.bodyColour : colour };
+            cap.polish = k.capMaterial == 1 ? 0.8f : 0.32f;
+            cap.brushedRings = metal;
+            m.parts.push_back (std::move (cap));
+            capTop = topY + (k.capDome ? 0.008f : 0.0045f);
+        }
+
+        // Pointer
+        const float py = capTop + 0.0008f;
+        switch (k.pointer)
+        {
+            case KnobRecipe::line:
+                m.parts.push_back ({ geo::box ({ -0.0055f, py - 0.0012f, -(topR - 0.006f) }, { 0.0055f, py + 0.0012f, -topR * 0.18f }), Role::pointer, true, k.pointerColour });
+                break;
+            case KnobRecipe::notch:
+                m.parts.push_back ({ geo::box ({ -0.0045f, py - 0.0012f, -(topR - 0.004f) }, { 0.0045f, py + 0.0006f, -topR * 0.35f }), Role::body, true, k.pointerColour });
+                break;
+            case KnobRecipe::dot:
+            {
+                MeshData d;
+                d.append (lathe (std::max (0.006f, topR * 0.11f), { { 0.0f, py - 0.0015f }, { 0.0f, py + 0.0012f } }, std::max (16, seg / 4), true),
+                          Mat4::translation ({ 0.0f, 0.0f, -topR * 0.68f }));
+                m.parts.push_back ({ std::move (d), k.pointerColour.x < 0.1f ? Role::body : Role::pointer, true, k.pointerColour });
+                break;
+            }
+            case KnobRecipe::skirtLine:
+                m.parts.push_back ({ geo::box ({ -0.005f, skirtH - 0.0015f, -(k.skirtR * r - 0.004f) }, { 0.005f, skirtH + 0.0012f, -(r - 0.002f) }), Role::pointer, true, k.pointerColour });
+                break;
+            case KnobRecipe::bar:
+            {
+                const float len = r * 1.55f, w = r * 0.40f;
+                m.parts.push_back ({ geo::pointerPlate (len, r * 0.55f, w, y0, y0 + h * 0.85f), k.bodyMetal ? Role::metal : Role::body, true, k.bodyColour });
+                m.parts.push_back ({ geo::box ({ -0.005f, y0 + h * 0.85f - 0.0006f, -(len - 0.008f) }, { 0.005f, y0 + h * 0.85f + 0.0025f, -r * 0.2f }), Role::pointer, true, k.pointerColour });
+                m.footprintRadius = std::max (m.footprintRadius, len);
+                m.shadowRadius = r;
+                m.beakLength = len;
+                m.beakHalfWidth = w;
+                break;
+            }
+            case KnobRecipe::wing:
+            {
+                m.parts.push_back ({ geo::box ({ -r * 0.16f, topY - 0.02f, -r * 1.02f }, { r * 0.16f, topY + 0.010f, r * 1.02f }), Role::body, true, k.bodyColour });
+                m.parts.push_back ({ geo::box ({ -0.005f, topY + 0.0095f, -r }, { 0.005f, topY + 0.0125f, -r * 0.2f }), Role::pointer, true, k.pointerColour });
+                break;
+            }
+        }
+
+        m.footprintRadius = std::max ({ m.footprintRadius, r * 1.02f, k.skirtR * r });
+        if (m.shadowRadius <= 0.0f)
+            m.shadowRadius = std::max (r, k.skirtR * r);
+        m.height = capTop;
+        return m;
     }
 
     Model knob (KnobStyle style, float r, Vec3 accent, int detail)
@@ -227,6 +468,11 @@ namespace hwk::models
                 m.height = top;
                 break;
             }
+
+            default:
+                if (auto* recipe = recipeFor (style))
+                    return recipeKnob (*recipe, r, accent, detail);
+                break;
         }
 
         return m;
@@ -317,14 +563,15 @@ namespace hwk::models
     }
 
     //==============================================================================
-    Model rockerSwitch (int detail)
+    Model rockerSwitch (int detail, Vec3 paddleColour, float widthScale)
     {
         // A panel rocker: chamfered bezel with a dark well, and a satin paddle that rocks about its middle,
         // marked I (on) at the -z end and O (off) at the +z end. The paddle and its marks are the parts
         // that move: rotate them about x at rockerPivotY.
         Model m;
         const int corner = segmentsFor (detail) / 16 + 2;   // 4 .. 18 per corner
-        constexpr float bw = rockerHalfW, bd = rockerHalfD, rc = 0.012f;
+        const float bw = rockerHalfW * widthScale, bd = rockerHalfD;
+        constexpr float rc = 0.015f;
 
         m.parts.push_back ({ sweptRoundedRect (bw - rc, bd - rc, rc, corner,
                                                { { 0.0f, 0.0f }, { 0.0f, 0.007f }, { -0.003f, 0.011f }, { -0.008f, 0.012f },
@@ -333,24 +580,129 @@ namespace hwk::models
         m.parts.push_back ({ geo::horizontalQuad ({ 0.0f, 0.0f, bw - 0.010f, bd - 0.010f }, -0.013f), Role::body, false, { 0.004f, 0.004f, 0.005f } });
 
         // Paddle, built about its pivot (y = 0 here = rockerPivotY on the panel)
-        constexpr float pw = bw - 0.0125f, pd = bd - 0.0125f, pr = 0.006f, topY = 0.016f;
+        const float pw = bw - 0.0125f, pd = bd - 0.0125f;
+        constexpr float pr = 0.007f, topY = 0.020f;
         Part paddle { sweptRoundedRect (pw - pr, pd - pr, pr, corner,
                                         { { 0.0f, -0.020f }, { 0.0f, topY - 0.004f }, { -0.0015f, topY - 0.001f }, { -0.004f, topY } }, true),
-                      Role::body, true, { 0.045f, 0.045f, 0.050f } };
+                      Role::body, true, paddleColour };
         m.parts.push_back (std::move (paddle));
 
         // I and O, raised a hair above the paddle so they print cleanly at any distance
         const float markY = topY + 0.0006f;
-        m.parts.push_back ({ geo::box ({ -0.0032f, markY - 0.0004f, -pd + 0.012f }, { 0.0032f, markY + 0.0004f, -pd + 0.036f }),
+        m.parts.push_back ({ geo::box ({ -0.0042f, markY - 0.0004f, -pd + 0.015f }, { 0.0042f, markY + 0.0004f, -pd + 0.046f }),
                              Role::pointer, true, { 0.93f, 0.93f, 0.95f } });
         MeshData o;
-        o.append (geo::flatAnnulus (0.0062f, 0.0100f, std::max (16, segmentsFor (detail) / 4)), Mat4::translation ({ 0.0f, markY, pd - 0.024f }));
+        o.append (geo::flatAnnulus (0.0082f, 0.0132f, std::max (16, segmentsFor (detail) / 4)), Mat4::translation ({ 0.0f, markY, pd - 0.031f }));
         m.parts.push_back ({ std::move (o), Role::pointer, true, { 0.93f, 0.93f, 0.95f } });
 
         m.footprintRadius = bd;
         m.height = rockerPivotY + topY;
         m.shadowRadius = bw;
+        m.leverPivotY = rockerPivotY;
+        m.leverAngle = rockerAngle;
+        m.halfW = bw;
+        m.halfD = bd;
         return m;
+    }
+
+    const char* switchStyleName (SwitchStyle s) noexcept
+    {
+        switch (s)
+        {
+            case SwitchStyle::rocker:       return "Rocker, I / O";
+            case SwitchStyle::rockerRed:    return "Rocker, red paddle";
+            case SwitchStyle::rockerWide:   return "Rocker, wide";
+            case SwitchStyle::batToggle:    return "Bat toggle";
+            case SwitchStyle::paddleToggle: return "Paddle toggle";
+            default:                        return "Switch";
+        }
+    }
+
+    Model toggleSwitch (SwitchStyle style, int detail)
+    {
+        switch (style)
+        {
+            case SwitchStyle::rockerRed:  return rockerSwitch (detail, { 0.46f, 0.07f, 0.06f }, 1.0f);
+            case SwitchStyle::rockerWide: return rockerSwitch (detail, { 0.045f, 0.045f, 0.050f }, 1.45f);
+            case SwitchStyle::batToggle:
+            case SwitchStyle::paddleToggle:
+            {
+                // Nut and bushing fixed; the lever (a bat, or a flat paddle) swings about the bushing
+                Model m = batToggleBase();
+                for (auto& part : m.parts)
+                    part.rotates = false;
+                if (style == SwitchStyle::batToggle)
+                {
+                    for (auto& part : batToggleLever().parts)
+                        m.parts.push_back (part);
+                }
+                else
+                {
+                    Part paddle { geo::sweptRoundedRect (0.010f, 0.003f, 0.006f, std::max (4, segmentsFor (detail) / 16), { { 0.0f, -0.010f }, { 0.0f, 0.140f }, { -0.004f, 0.150f } }, true),
+                                  Role::metal, true, { 0.86f, 0.86f, 0.88f } };
+                    paddle.polish = 0.7f;
+                    m.parts.push_back (std::move (paddle));
+                }
+                m.leverPivotY = 0.05f;
+                m.leverAngle = 28.0f * geo::kPi / 180.0f;
+                m.halfW = 0.042f;
+                m.halfD = 0.042f + 0.186f * std::sin (m.leverAngle);
+                m.footprintRadius = m.halfD;
+                m.shadowRadius = 0.042f;
+                return m;
+            }
+            default: return rockerSwitch (detail);
+        }
+    }
+
+    const char* buttonStyleName (ButtonStyle s) noexcept
+    {
+        switch (s)
+        {
+            case ButtonStyle::square:      return "Square latching";
+            case ButtonStyle::round:       return "Round";
+            case ButtonStyle::wide:        return "Wide";
+            case ButtonStyle::chromeBezel: return "Chrome bezel";
+            case ButtonStyle::softDome:    return "Soft dome";
+            default:                       return "Button";
+        }
+    }
+
+    Model pushButton (ButtonStyle style, float halfW, float halfD, int detail)
+    {
+        using geo::lathe;
+        const int seg = segmentsFor (detail);
+        switch (style)
+        {
+            case ButtonStyle::round:
+            case ButtonStyle::softDome:
+            {
+                Model m;
+                const float r = std::max (halfW, halfD);
+                m.parts.push_back ({ lathe (r + 0.016f, { { 0.0f, 0.0f }, { 0.0f, 0.009f }, { -0.004f, 0.014f }, { -0.010f, 0.014f }, { -0.012f, 0.008f }, { -0.012f, 0.002f } }, seg, false),
+                                     Role::body, false, { 0.018f, 0.018f, 0.020f } });
+                std::vector<ProfilePoint> cap = style == ButtonStyle::round
+                    ? std::vector<ProfilePoint> { { 0.0f, 0.004f }, { 0.0f, 0.040f }, { -0.005f, 0.050f }, { -0.012f, 0.054f }, { -0.02f, 0.052f } }
+                    : std::vector<ProfilePoint> { { 0.0f, 0.004f }, { 0.0f, 0.030f }, { -0.008f, 0.046f }, { -0.020f, 0.056f }, { -0.035f, 0.060f } };
+                m.parts.push_back ({ lathe (r - 0.004f, cap, seg, true), Role::accent, true, { 0.40f, 0.41f, 0.43f } });
+                m.footprintRadius = r + 0.016f;
+                m.height = 0.06f;
+                m.halfW = m.halfD = r + 0.016f;
+                return m;
+            }
+            case ButtonStyle::wide:        { auto m = pushButton (halfW * 1.45f, halfD * 0.85f, detail); m.halfW = halfW * 1.45f + 0.016f; m.halfD = halfD * 0.85f + 0.016f; return m; }
+            case ButtonStyle::chromeBezel:
+            {
+                auto m = pushButton (halfW, halfD, detail);
+                m.parts[0].role = Role::metal;
+                m.parts[0].colour = { 0.82f, 0.82f, 0.85f };
+                m.parts[0].polish = 0.75f;
+                m.halfW = halfW + 0.016f;
+                m.halfD = halfD + 0.016f;
+                return m;
+            }
+            default: { auto m = pushButton (halfW, halfD, detail); m.halfW = halfW + 0.016f; m.halfD = halfD + 0.016f; return m; }
+        }
     }
 
     Model batToggleBase()

@@ -47,6 +47,10 @@ namespace hwk::models
             the centre, as a knob does). The renderer must rotate the moving part about it. */
         float pivotOffset = 0.0f;
 
+        /** Switches: the moving parts turn about x at this height, by -leverAngle when on, +leverAngle when off. */
+        float leverPivotY = 0.0f, leverAngle = 0.0f;
+        float halfW = 0.0f, halfD = 0.0f;   // switches / buttons: the fixed outline on the panel
+
         float bodyShadowRadius() const noexcept { return shadowRadius > 0.0f ? shadowRadius : footprintRadius; }
     };
 
@@ -60,12 +64,29 @@ namespace hwk::models
         aluminium,    // machined aluminium cap with knurled flank and an engraved dot
         softTouch,    // grey soft-touch rubber with a coloured cap (console style)
         jewelCap,     // black body with a polished metal cap and a coloured jewel centre
-        skirted       // outboard-gear type: black cone on a machined metal skirt, white pointer
+        skirted,      // outboard-gear type: black cone on a machined metal skirt, white pointer
+
+        // Recipe styles (see knobRecipe): console, vintage, machined, instrument, hi-fi, guitar
+        consoleAccent, consoleRed, consoleBlue, consoleGreen, consoleYellow, consoleWhite, consoleLow,
+        marconi, bakelitePointer, creamRadio, bakeliteFluted, chromeSkirtCone, wingPointer, broadcastBrass, daviesSmall,
+        machinedSilver, machinedBlack, machinedGunmetal, brassKnurl, crosshatchSilver, steppedAluminium, chromeDome,
+        colletBlack, colletGrey, colletCream, rogan, roganSkirt, rubberTall, rubberLow, rubberRibbed,
+        pointerBarBlack, pointerBarSilver, milSpecPointer,
+        hifiDisc, hifiBlackDisc, hifiDimple, gunmetalCap,
+        guitarTopHat, guitarSpeed, guitarDome, amberInstrument, oxbloodInstrument,
+        count
     };
 
-    inline constexpr std::array<KnobStyle, 7> allKnobStyles { KnobStyle::proXl, KnobStyle::fluted, KnobStyle::chickenHead,
-                                                             KnobStyle::aluminium, KnobStyle::softTouch, KnobStyle::jewelCap,
-                                                             KnobStyle::skirted };
+    inline constexpr int numKnobStyles = (int) KnobStyle::count;
+
+    /** Every style, in order (for galleries and tests). */
+    inline std::vector<KnobStyle> allKnobStyles()
+    {
+        std::vector<KnobStyle> v;
+        for (int i = 0; i < numKnobStyles; ++i)
+            v.push_back ((KnobStyle) i);
+        return v;
+    }
 
     const char* knobStyleName (KnobStyle) noexcept;
 
@@ -89,11 +110,26 @@ namespace hwk::models
     /** Latching square push button: collar (fixed) + cap (moves, does not rotate). */
     Model pushButton (float halfW = 0.060f, float halfD = 0.042f, int detail = 1);
 
+    /** Button styles. */
+    enum class ButtonStyle { square, round, wide, chromeBezel, softDome, count };
+    inline constexpr int numButtonStyles = (int) ButtonStyle::count;
+    const char* buttonStyleName (ButtonStyle) noexcept;
+
+    /** A latching push button in any style: collar (fixed) + cap (moves, does not rotate). */
+    Model pushButton (ButtonStyle, float halfW, float halfD, int detail);
+
+    /** Two-position switch styles. Every one is a Model whose moving parts turn about x at
+        Model::leverPivotY by -/+ Model::leverAngle (on / off), so a renderer draws them all alike. */
+    enum class SwitchStyle { rocker, rockerRed, rockerWide, batToggle, paddleToggle, count };
+    inline constexpr int numSwitchStyles = (int) SwitchStyle::count;
+    const char* switchStyleName (SwitchStyle) noexcept;
+    Model toggleSwitch (SwitchStyle, int detail);
+
     /** I / O rocker switch: bezel and well (fixed), paddle with its I and O marks (rotates about x at
         rockerPivotY: -rockerAngle = the I end pressed in = on, +rockerAngle = off). */
-    inline constexpr float rockerHalfW = 0.046f, rockerHalfD = 0.076f, rockerPivotY = 0.004f;
+    inline constexpr float rockerHalfW = 0.060f, rockerHalfD = 0.098f, rockerPivotY = 0.005f;
     inline constexpr float rockerAngle = 11.0f * 3.14159265f / 180.0f;
-    Model rockerSwitch (int detail = 1);
+    Model rockerSwitch (int detail = 1, Vec3 paddleColour = { 0.045f, 0.045f, 0.050f }, float widthScale = 1.0f);
 
     /** Bat toggle: hex nut + bushing (fixed) and a lever part that pivots about x at `pivotY`. */
     Model batToggleBase();
