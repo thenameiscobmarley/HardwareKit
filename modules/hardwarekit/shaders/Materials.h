@@ -42,6 +42,10 @@ namespace hwk::shaders
         extern const Material screenOverlay;  // screen-space quads: uParams = (textured, alpha, round, _)
         extern const Material glowSprite;     // additive halo on a unit quad: uBaseColor * uParams.x, uParams.y falloff
         extern const Material valueArc;       // knob value arc on an annulus: uParams = (from angle, to angle, alpha, track alpha)
+        extern const Material brushedFace;
+        extern const Material meterFace;
+        extern const Material coverGlass;
+        extern const Material windowLight;
         extern const Material magnifierLens;  // fisheye loupe: uTex = zoomed view; uParams = (fisheye, chroma, _, alpha), uParams2 = (centre px, radius px, _)
     }
 }

@@ -215,6 +215,18 @@ namespace hwk::geo
         return mesh;
     }
 
+    MeshData quad (Vec3 a, Vec3 b, Vec3 c, Vec3 d)
+    {
+        MeshData mesh;
+        const auto n = gfx::normalise (gfx::cross (b - a, d - a));
+        const auto i0 = mesh.addVertex (a, n, 0.0f, 0.0f);
+        const auto i1 = mesh.addVertex (b, n, 1.0f, 0.0f);
+        const auto i2 = mesh.addVertex (c, n, 1.0f, 1.0f);
+        const auto i3 = mesh.addVertex (d, n, 0.0f, 1.0f);
+        mesh.addQuad (i0, i1, i2, i3);
+        return mesh;
+    }
+
     MeshData box (Vec3 lo, Vec3 hi)
     {
         MeshData mesh;

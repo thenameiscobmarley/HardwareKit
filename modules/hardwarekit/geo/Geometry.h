@@ -43,6 +43,10 @@ namespace hwk::geo
     /** Flat quad with uv 0..1 (u along +x, v along +z). */
     MeshData horizontalQuad (const Rect& r, float y);
 
+    /** Flat quad from four corners in order (normal from the winding, uv across the patch).
+        Handy for sweeping a surface along a curve a step at a time. */
+    MeshData quad (Vec3 a, Vec3 b, Vec3 c, Vec3 d);
+
     MeshData box (Vec3 minCorner, Vec3 maxCorner);
     MeshData flatAnnulus (float innerRadius, float outerRadius, int segments);
     MeshData dome (float radius, float height, int segments, int rings);

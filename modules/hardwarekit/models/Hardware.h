@@ -10,13 +10,15 @@
         Role::metal    chrome / brushed / aluminium   (chrome material, `polish`, optional brushed rings)
         Role::pointer  indicator line / dot / inlay   (emissive, bright)
         Role::accent   coloured cap or insert         (plastic material in the style's accent colour)
+        Role::screen   printed meter face / dial      (the caller's own display material, uv 0..1)
+        Role::glass    cover glass over a screen      (drawn last, transparent, reflective)
 */
 namespace hwk::models
 {
     using gfx::MeshData;
     using gfx::Vec3;
 
-    enum class Role { body, metal, pointer, accent };
+    enum class Role { body, metal, pointer, accent, screen, glass };
 
     struct Part
     {
@@ -41,6 +43,10 @@ namespace hwk::models
         float shadowRadius = 0.0f;
         float beakLength = 0.0f, beakHalfWidth = 0.0f;
 
+        /** Meters: where the needle is hinged, in +z from the model centre (0 = rotate about
+            the centre, as a knob does). The renderer must rotate the moving part about it. */
+        float pivotOffset = 0.0f;
+
         float bodyShadowRadius() const noexcept { return shadowRadius > 0.0f ? shadowRadius : footprintRadius; }
     };
 
@@ -53,11 +59,13 @@ namespace hwk::models
         chickenHead,  // bakelite pointer knob with a white inlay, for selectors
         aluminium,    // machined aluminium cap with knurled flank and an engraved dot
         softTouch,    // grey soft-touch rubber with a coloured cap (console style)
-        jewelCap      // black body with a polished metal cap and a coloured jewel centre
+        jewelCap,     // black body with a polished metal cap and a coloured jewel centre
+        skirted       // outboard-gear type: black cone on a machined metal skirt, white pointer
     };
 
-    inline constexpr std::array<KnobStyle, 6> allKnobStyles { KnobStyle::proXl, KnobStyle::fluted, KnobStyle::chickenHead,
-                                                             KnobStyle::aluminium, KnobStyle::softTouch, KnobStyle::jewelCap };
+    inline constexpr std::array<KnobStyle, 7> allKnobStyles { KnobStyle::proXl, KnobStyle::fluted, KnobStyle::chickenHead,
+                                                             KnobStyle::aluminium, KnobStyle::softTouch, KnobStyle::jewelCap,
+                                                             KnobStyle::skirted };
 
     const char* knobStyleName (KnobStyle) noexcept;
 
@@ -87,4 +95,28 @@ namespace hwk::models
 
     /** Faceplate outer bevel (panel-local, face at y = 0, thickness toward -y). */
     MeshData faceplateEdge (float halfW, float halfH, float thickness);
+
+    //==============================================================================
+    /** A moving-coil VU meter, the kind bolted into outboard gear: a metal bezel around a
+        recessed printed face, a needle on a pivot below the face, a hub, and cover glass.
+
+        Built panel-local around the centre of its window (x across, z down, y out of the panel).
+        The needle part rotates about +y, so the same machinery that turns a knob swings it:
+        angle 0 points straight up, negative to the left.
+
+        Parts, in order: case, bezel, face (Role::screen, uv 0..1 across the window),
+        needle (Role::pointer, rotates), hub, glass (Role::glass).
+        The needle pivot sits `pivotDrop` below the bottom of the face, off the visible dial. */
+    Model vuMeter (float halfW, float halfH, float depth, Vec3 bezelColour = { 0.10f, 0.11f, 0.13f });
+
+    /** Sweep of a VU needle: angle for a 0..1 reading (radians about +y). */
+    inline constexpr float vuSweep = 0.92f;   // ~53 degrees total
+    inline float vuAngleFor (float normalised) noexcept { return (normalised - 0.5f) * vuSweep; }
+
+    /** The dial geometry, shared by the model and by whoever prints the face:
+        the hinge sits `pivotDrop` below the centre of the window, and the needle tip sweeps
+        an arc of radius `needleReach` around it. Both are multiples of the window half-height. */
+    inline constexpr float vuPivotDrop  = 1.35f;
+    inline constexpr float vuNeedleTip  = 2.07f;
+    inline constexpr float vuArcRadius  = 1.92f;
 }
