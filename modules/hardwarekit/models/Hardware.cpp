@@ -25,23 +25,26 @@ namespace hwk::models
 
         constexpr Vec3 black   { 0.030f, 0.030f, 0.033f }, darkGrey { 0.10f, 0.10f, 0.11f }, grey { 0.30f, 0.31f, 0.33f };
         constexpr Vec3 cream   { 0.80f, 0.76f, 0.66f }, bakelite { 0.11f, 0.058f, 0.032f }, rubber { 0.075f, 0.075f, 0.08f };
-        constexpr Vec3 alu     { 0.80f, 0.80f, 0.82f }, nickel { 0.70f, 0.70f, 0.72f }, gunmetal { 0.36f, 0.37f, 0.40f };
-        constexpr Vec3 brass   { 0.78f, 0.62f, 0.34f }, anodBlack { 0.085f, 0.085f, 0.095f }, chromeC { 0.86f, 0.86f, 0.88f };
-        constexpr Vec3 capRed  { 0.62f, 0.10f, 0.08f }, capBlue { 0.14f, 0.26f, 0.55f }, capGreen { 0.14f, 0.40f, 0.22f };
-        constexpr Vec3 capYellow { 0.82f, 0.64f, 0.14f }, capWhite { 0.90f, 0.90f, 0.88f }, amber { 0.52f, 0.31f, 0.10f };
-        constexpr Vec3 oxblood { 0.42f, 0.08f, 0.12f };
+        constexpr Vec3 alu     { 0.74f, 0.74f, 0.76f }, nickel { 0.66f, 0.66f, 0.68f }, gunmetal { 0.36f, 0.37f, 0.40f };
+        constexpr Vec3 brass   { 0.78f, 0.62f, 0.34f }, anodBlack { 0.085f, 0.085f, 0.095f }, chromeC { 0.76f, 0.76f, 0.78f };
+        // Cap colours as real console / outboard caps come: moulded, muted, never candy-bright
+        constexpr Vec3 capRed  { 0.46f, 0.11f, 0.09f }, capBlue { 0.16f, 0.25f, 0.44f }, capGreen { 0.16f, 0.32f, 0.22f };
+        constexpr Vec3 capYellow { 0.70f, 0.56f, 0.20f }, capWhite { 0.84f, 0.83f, 0.80f }, amber { 0.46f, 0.29f, 0.11f };
+        constexpr Vec3 oxblood { 0.36f, 0.08f, 0.10f };
+        // Neve 1073 / Marconi knob plastics
+        constexpr Vec3 marconiGrey { 0.17f, 0.18f, 0.20f }, marconiBlue { 0.075f, 0.11f, 0.19f }, marconiRed { 0.26f, 0.06f, 0.055f };
         constexpr Vec3 white { 0.95f, 0.95f, 0.97f }, ink { 0.02f, 0.02f, 0.02f };
         constexpr Vec3 none {};
 
         using R = KnobRecipe;
         const KnobRecipe recipes[] {
             // Console: grey collet bodies with coloured caps
-            { "Console, unit colour", R::cylinder, 1.05f, 1, grey, false, 0, false, 36, 0.020f, 0.30f, 0, none, false, 0, 0.72f, 2, none, false, R::line, white },
-            { "Console, red cap",     R::cylinder, 1.05f, 1, grey, false, 0, false, 36, 0.020f, 0.30f, 0, none, false, 0, 0.72f, 3, capRed, false, R::line, white },
-            { "Console, blue cap",    R::cylinder, 1.05f, 1, grey, false, 0, false, 36, 0.020f, 0.30f, 0, none, false, 0, 0.72f, 3, capBlue, false, R::line, white },
-            { "Console, green cap",   R::cylinder, 1.05f, 1, grey, false, 0, false, 36, 0.020f, 0.30f, 0, none, false, 0, 0.72f, 3, capGreen, false, R::line, white },
-            { "Console, yellow cap",  R::cylinder, 1.05f, 1, grey, false, 0, false, 36, 0.020f, 0.30f, 0, none, false, 0, 0.72f, 3, capYellow, false, R::line, ink },
-            { "Console, white cap",   R::cylinder, 1.05f, 1, darkGrey, false, 0, false, 36, 0.020f, 0.30f, 0, none, false, 0, 0.72f, 3, capWhite, false, R::line, ink },
+            { "Console, unit colour", R::cylinder, 1.05f, 1, grey, false, 0, false, 36, 0.020f, 0.30f, 0, none, false, 0, 0.50f, 2, none, false, R::line, white },
+            { "Console, red cap",     R::cylinder, 1.05f, 1, grey, false, 0, false, 36, 0.020f, 0.30f, 0, none, false, 0, 0.50f, 3, capRed, false, R::line, white },
+            { "Console, blue cap",    R::cylinder, 1.05f, 1, grey, false, 0, false, 36, 0.020f, 0.30f, 0, none, false, 0, 0.50f, 3, capBlue, false, R::line, white },
+            { "Console, green cap",   R::cylinder, 1.05f, 1, grey, false, 0, false, 36, 0.020f, 0.30f, 0, none, false, 0, 0.50f, 3, capGreen, false, R::line, white },
+            { "Console, yellow cap",  R::cylinder, 1.05f, 1, grey, false, 0, false, 36, 0.020f, 0.30f, 0, none, false, 0, 0.50f, 3, capYellow, false, R::line, ink },
+            { "Console, white cap",   R::cylinder, 1.05f, 1, darkGrey, false, 0, false, 36, 0.020f, 0.30f, 0, none, false, 0, 0.50f, 3, capWhite, false, R::line, ink },
             { "Console, low",         R::disc,     0.55f, 1, grey, false, 0, false, 48, 0.018f, 0.50f, 0, none, false, 0, 0.55f, 2, none, false, R::dot, white },
 
             // Vintage
@@ -64,9 +67,9 @@ namespace hwk::models
             { "Chrome dome",          R::dome,     0.90f, 1, chromeC, true, 0.90f, false, 0, 0, 0, 0, none, false, 0, 0.0f, 0, none, false, R::notch, ink },
 
             // Instrument collets and Eurorack
-            { "Collet, black",        R::collet,   1.30f, 1, black, false, 0, false, 24, 0.030f, 0.30f, 0, none, false, 0, 0.60f, 2, none, false, R::line, white },
-            { "Collet, grey",         R::collet,   1.30f, 1, grey, false, 0, false, 24, 0.030f, 0.30f, 0, none, false, 0, 0.60f, 3, capRed, false, R::line, white },
-            { "Collet, cream",        R::collet,   1.30f, 1, cream, false, 0, false, 24, 0.030f, 0.30f, 0, none, false, 0, 0.60f, 3, capBlue, false, R::line, white },
+            { "Collet, black",        R::collet,   1.30f, 1, black, false, 0, false, 24, 0.030f, 0.30f, 0, none, false, 0, 0.46f, 2, none, false, R::line, white },
+            { "Collet, grey",         R::collet,   1.30f, 1, grey, false, 0, false, 24, 0.030f, 0.30f, 0, none, false, 0, 0.46f, 3, capRed, false, R::line, white },
+            { "Collet, cream",        R::collet,   1.30f, 1, cream, false, 0, false, 24, 0.030f, 0.30f, 0, none, false, 0, 0.46f, 3, capBlue, false, R::line, white },
             { "Rogan",                R::taper,    1.10f, 0.72f, black, false, 0, false, 32, 0.035f, 0.35f, 0, none, false, 0, 0.0f, 0, none, false, R::line, white },
             { "Rogan with skirt",     R::taper,    1.10f, 0.72f, black, false, 0, false, 32, 0.035f, 0.35f, 1.28f, black, false, 0, 0.0f, 0, none, false, R::skirtLine, white },
             { "Rubber, tall",         R::taper,    1.25f, 0.85f, rubber, false, 0, false, 60, 0.015f, 0.40f, 0, none, false, 0, 0.0f, 0, none, false, R::line, white },
@@ -86,8 +89,13 @@ namespace hwk::models
             { "Top-hat",              R::cylinder, 0.90f, 1, cream, false, 0, false, 30, 0.020f, 0.30f, 1.35f, cream, false, 0, 0.0f, 0, none, false, R::skirtLine, ink },
             { "Speed knob",           R::barrel,   1.15f, 1, black, false, 0, false, 40, 0.025f, 0.60f, 0, none, false, 0, 0.0f, 0, none, false, R::dot, white },
             { "Guitar dome",          R::dome,     1.00f, 1, black, false, 0, false, 28, 0.030f, 0.30f, 0, none, false, 0, 0.48f, 1, chromeC, true, R::line, white },
-            { "Amber instrument",     R::cylinder, 1.00f, 1, darkGrey, false, 0, false, 36, 0.022f, 0.30f, 0, none, false, 0, 0.72f, 3, amber, false, R::line, white },
-            { "Oxblood instrument",   R::cylinder, 1.00f, 1, darkGrey, false, 0, false, 36, 0.022f, 0.30f, 0, none, false, 0, 0.72f, 3, oxblood, false, R::line, white },
+            { "Amber instrument",     R::cylinder, 1.00f, 1, darkGrey, false, 0, false, 36, 0.022f, 0.30f, 0, none, false, 0, 0.50f, 3, amber, false, R::line, white },
+            { "Oxblood instrument",   R::cylinder, 1.00f, 1, darkGrey, false, 0, false, 36, 0.022f, 0.30f, 0, none, false, 0, 0.50f, 3, oxblood, false, R::line, white },
+
+            // Neve 1073-type Marconi knobs: two-tier moulded body, skirt in the same plastic, white line
+            { "Marconi, grey",        R::stepped,  1.10f, 1, marconiGrey, false, 0, false, 0, 0, 0, 1.30f, marconiGrey, false, 0, 0.0f, 0, none, false, R::skirtLine, white },
+            { "Marconi, blue",        R::stepped,  1.10f, 1, marconiBlue, false, 0, false, 0, 0, 0, 1.30f, marconiBlue, false, 0, 0.0f, 0, none, false, R::skirtLine, white },
+            { "Marconi, red",         R::stepped,  1.10f, 1, marconiRed, false, 0, false, 0, 0, 0, 1.30f, marconiRed, false, 0, 0.0f, 0, none, false, R::skirtLine, white },
         };
         static_assert (sizeof (recipes) / sizeof (recipes[0]) == (size_t) KnobStyle::count - (size_t) KnobStyle::consoleAccent,
                        "one recipe per recipe style");
@@ -243,7 +251,7 @@ namespace hwk::models
                 break;
             }
             case KnobRecipe::skirtLine:
-                m.parts.push_back ({ geo::box ({ -0.005f, skirtH - 0.0015f, -(k.skirtR * r - 0.004f) }, { 0.005f, skirtH + 0.0012f, -(r - 0.002f) }), Role::pointer, true, k.pointerColour });
+                m.parts.push_back ({ geo::box ({ -0.0065f, skirtH - 0.0015f, -(k.skirtR * r - 0.003f) }, { 0.0065f, skirtH + 0.0016f, -(r - 0.002f) }), Role::pointer, true, k.pointerColour });
                 break;
             case KnobRecipe::bar:
             {

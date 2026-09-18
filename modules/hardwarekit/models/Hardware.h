@@ -74,6 +74,7 @@ namespace hwk::models
         pointerBarBlack, pointerBarSilver, milSpecPointer,
         hifiDisc, hifiBlackDisc, hifiDimple, gunmetalCap,
         guitarTopHat, guitarSpeed, guitarDome, amberInstrument, oxbloodInstrument,
+        marconiGrey, marconiBlue, marconiRed,   // Neve 1073-type
         count
     };
 

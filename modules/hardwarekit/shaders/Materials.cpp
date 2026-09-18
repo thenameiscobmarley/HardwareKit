@@ -252,7 +252,7 @@ void main()
     float fres = mix (0.55, 1.0, pow (facing, 5.0));
     col  = uBaseColor * (amb * 0.18 + ndl * lightCol * 0.25) * (1.0 - polish * 0.6);
     col += envColor (R) * mix (uBaseColor, vec3 (1.0), fres * 0.5) * mix (0.55, 0.95, polish) * fres;
-    col += lightCol * pow (ndh, mix (40.0, 260.0, polish)) * mix (0.6, 2.2, polish);
+    col += lightCol * pow (ndh, mix (40.0, 220.0, polish)) * mix (0.45, 1.5, polish);
     col += vec3 (0.80, 0.84, 0.92) * pow (facing, 3.0) * 0.08;
     if (uParams.y > 0.5)
     {
@@ -277,8 +277,9 @@ void main()
         shade = 0.35 + 0.65 * ridge;
     }
     col  = uBaseColor * (amb * 0.60 + wrap * lightCol * 0.80 + fill);
-    col += lightCol * (pow (ndh, 50.0) * 0.28 + pow (ndh, 8.0) * 0.05) * shade;
-    col += envColor (R) * (0.04 + 0.20 * pow (facing, 4.0)) * shade;
+    // Satin, like moulded phenolic / ABS knobs: a broad soft sheen, not a hard gloss dot
+    col += lightCol * (pow (ndh, 26.0) * 0.13 + pow (ndh, 6.0) * 0.045) * shade;
+    col += envColor (R) * (0.03 + 0.13 * pow (facing, 4.0)) * shade;
     col += uEmissive;
 )GLSL" };
 
