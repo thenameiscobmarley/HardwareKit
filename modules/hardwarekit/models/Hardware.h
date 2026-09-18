@@ -69,12 +69,31 @@ namespace hwk::models
 
     const char* knobStyleName (KnobStyle) noexcept;
 
+    /** Levels of detail every model can be built at: 32, 64, 128 and 256 segments around. From level 2
+        up, grip ridges, flutes and knurling are carved into the geometry (below it the plastic material
+        paints them), and the finer machined parts appear: inserts, trim rings, set screws.
+        Pick the level from the part's size on screen - see detailForPixels(). */
+    inline constexpr int numDetailLevels = 4;
+    int segmentsFor (int detail) noexcept;
+
+    /** The level of detail for a round part `radiusPixels` across on screen (radius, in pixels). */
+    inline int detailForPixels (float radiusPixels) noexcept
+    {
+        return radiusPixels < 12.0f ? 0 : radiusPixels < 28.0f ? 1 : radiusPixels < 70.0f ? 2 : 3;
+    }
+
     /** radius = body radius; accent colours the cap / insert where the style has one. */
-    Model knob (KnobStyle, float radius = 0.114f, Vec3 accent = { 0.42f, 0.28f, 0.86f });
+    Model knob (KnobStyle, float radius = 0.114f, Vec3 accent = { 0.42f, 0.28f, 0.86f }, int detail = 1);
 
     //==============================================================================
     /** Latching square push button: collar (fixed) + cap (moves, does not rotate). */
-    Model pushButton (float halfW = 0.060f, float halfD = 0.042f);
+    Model pushButton (float halfW = 0.060f, float halfD = 0.042f, int detail = 1);
+
+    /** I / O rocker switch: bezel and well (fixed), paddle with its I and O marks (rotates about x at
+        rockerPivotY: -rockerAngle = the I end pressed in = on, +rockerAngle = off). */
+    inline constexpr float rockerHalfW = 0.046f, rockerHalfD = 0.076f, rockerPivotY = 0.004f;
+    inline constexpr float rockerAngle = 11.0f * 3.14159265f / 180.0f;
+    Model rockerSwitch (int detail = 1);
 
     /** Bat toggle: hex nut + bushing (fixed) and a lever part that pivots about x at `pivotY`. */
     Model batToggleBase();

@@ -24,10 +24,22 @@ namespace hwk::models
         return geo::box ({ -halfWidth, y - 0.0005f, -(radius - 0.018f) }, { halfWidth, y + 0.003f, -inner });
     }
 
-    Model knob (KnobStyle style, float r, Vec3 accent)
+    int segmentsFor (int detail) noexcept
     {
+        constexpr int around[numDetailLevels] { 32, 64, 128, 256 };
+        return around[std::clamp (detail, 0, numDetailLevels - 1)];
+    }
+
+    Model knob (KnobStyle style, float r, Vec3 accent, int detail)
+    {
+        using geo::lathe;
+        using geo::Relief;
+
         Model m;
         m.footprintRadius = r * 1.12f;
+        detail = std::clamp (detail, 0, numDetailLevels - 1);
+        const int seg = segmentsFor (detail);
+        const bool carved = detail >= 2;     // close up: grip detail is real geometry, not shading
 
         switch (style)
         {
@@ -35,16 +47,26 @@ namespace hwk::models
             {
                 const float top = r * 1.18f, flange = r * 1.11f;
                 // Flange, a shallow undercut where it meets the panel, the ridged flank, then a
-                // chamfer and a slightly dished top - five changes of direction, so the light
-                // breaks over it the way it does on a moulded knob.
-                Part body { sweptRoundedRect (0, 0, r, 14,
-                                              { { flange - r, 0.0f }, { flange - r, top * 0.10f },
-                                                { flange - r - 0.004f, top * 0.13f }, { 0.0f, top * 0.19f },
-                                                { -0.003f, top - 0.020f }, { -0.010f, top - 0.005f },
-                                                { -0.022f, top }, { -0.030f, top - 0.004f } }, true),
-                            Role::body, true, { 0.030f, 0.030f, 0.033f }, 28.0f, top - 0.024f };
+                // chamfer and a slightly dished top.
+                Relief grip;
+                if (carved)
+                    grip = { 28, 0.035f, top * 0.22f, top - 0.024f, 0.006f, 0.35f };
+                Part body { lathe (r, { { flange - r, 0.0f }, { flange - r, top * 0.10f },
+                                        { flange - r - 0.004f, top * 0.13f }, { 0.0f, top * 0.19f },
+                                        { -0.003f, top - 0.020f }, { -0.010f, top - 0.005f },
+                                        { -0.022f, top }, { -0.030f, top - 0.004f } }, seg, true, grip),
+                            Role::body, true, { 0.030f, 0.030f, 0.033f }, carved ? 0.0f : 28.0f, top - 0.024f };
                 m.parts.push_back (std::move (body));
-                m.parts.push_back ({ pointerLine (r, top - 0.002f, 0.0065f, 0.030f), Role::pointer, true, { 0.92f, 0.93f, 0.95f } });
+                if (carved)
+                {
+                    // Brushed aluminium insert set into the dished top
+                    Part insert { lathe (r * 0.56f, { { 0.0f, top - 0.0050f }, { 0.0f, top - 0.0035f }, { -0.002f, top - 0.0025f } }, seg, true),
+                                  Role::metal, true, { 0.70f, 0.70f, 0.72f } };
+                    insert.polish = 0.40f;
+                    insert.brushedRings = true;
+                    m.parts.push_back (std::move (insert));
+                }
+                m.parts.push_back ({ pointerLine (r, top - 0.0015f, 0.0065f, 0.030f), Role::pointer, true, { 0.92f, 0.93f, 0.95f } });
                 m.height = top;
                 break;
             }
@@ -53,15 +75,16 @@ namespace hwk::models
             {
                 const float skirtR = r * 1.32f, top = r * 1.20f;
                 m.footprintRadius = skirtR;
-                m.parts.push_back ({ sweptRoundedRect (0, 0, skirtR, 12,
-                                                       { { 0.0f, 0.0f }, { 0.0f, 0.010f }, { -0.003f, 0.014f },
-                                                         { -0.010f, 0.022f }, { -skirtR + r + 0.004f, 0.026f },
-                                                         { -skirtR + r, 0.030f } }, true),
+                m.parts.push_back ({ lathe (skirtR, { { 0.0f, 0.0f }, { 0.0f, 0.010f }, { -0.003f, 0.014f },
+                                                     { -0.010f, 0.022f }, { -skirtR + r + 0.004f, 0.026f },
+                                                     { -skirtR + r, 0.030f } }, seg, true),
                                      Role::body, true, { 0.025f, 0.025f, 0.028f } });
-                m.parts.push_back ({ sweptRoundedRect (0, 0, r, 12,
-                                                       { { 0.0f, 0.026f }, { -0.004f, 0.040f }, { -0.006f, top - 0.026f },
-                                                         { -0.013f, top - 0.008f }, { -0.026f, top }, { -0.034f, top - 0.005f } }, true),
-                                     Role::body, true, { 0.030f, 0.030f, 0.033f }, 16.0f, top - 0.030f });
+                Relief flutes;
+                if (carved)
+                    flutes = { 18, 0.075f, 0.040f, top - 0.030f, 0.010f, 0.12f };   // rounded Davies-type flutes
+                m.parts.push_back ({ lathe (r, { { 0.0f, 0.026f }, { -0.004f, 0.040f }, { -0.006f, top - 0.026f },
+                                                 { -0.013f, top - 0.008f }, { -0.026f, top }, { -0.034f, top - 0.005f } }, seg, true, flutes),
+                                     Role::body, true, { 0.030f, 0.030f, 0.033f }, carved ? 0.0f : 16.0f, top - 0.030f });
                 m.parts.push_back ({ pointerLine (r, top, 0.006f, 0.0f), Role::pointer, true, { 0.95f, 0.95f, 0.97f } });
                 // pointer continues down the skirt
                 m.parts.push_back ({ geo::box ({ -0.005f, 0.021f, -(skirtR - 0.006f) }, { 0.005f, 0.027f, -(r - 0.004f) }), Role::pointer, true, { 0.95f, 0.95f, 0.97f } });
@@ -72,10 +95,17 @@ namespace hwk::models
             case KnobStyle::chickenHead:
             {
                 const float top = r * 0.95f;
-                m.parts.push_back ({ sweptRoundedRect (0, 0, r * 0.95f, 10, { { 0.0f, 0.0f }, { 0.0f, 0.03f }, { -0.012f, 0.045f } }, true),
+                m.parts.push_back ({ lathe (r * 0.95f, { { 0.0f, 0.0f }, { 0.0f, 0.03f }, { -0.012f, 0.045f } }, seg, true),
                                      Role::body, true, { 0.035f, 0.030f, 0.028f } });
                 m.parts.push_back ({ geo::pointerPlate (r * 1.55f, r * 0.55f, r * 0.42f, 0.04f, top), Role::body, true, { 0.035f, 0.030f, 0.028f } });
                 m.parts.push_back ({ geo::box ({ -0.006f, top - 0.0005f, -(r * 1.45f) }, { 0.006f, top + 0.003f, -r * 0.1f }), Role::pointer, true, { 0.96f, 0.94f, 0.88f } });
+                if (carved)   // a polished screw cap in the middle of the bakelite
+                {
+                    Part cap { lathe (r * 0.22f, { { 0.0f, top }, { 0.0f, top + 0.004f }, { -0.006f, top + 0.007f } }, seg / 2, true),
+                               Role::metal, true, { 0.80f, 0.78f, 0.74f } };
+                    cap.polish = 0.8f;
+                    m.parts.push_back (std::move (cap));
+                }
                 m.footprintRadius = r * 1.6f;
                 m.shadowRadius = r * 0.98f;        // the body; the beak casts its own, turning shadow
                 m.beakLength = r * 1.50f;
@@ -87,17 +117,19 @@ namespace hwk::models
             case KnobStyle::aluminium:
             {
                 const float top = r * 1.05f;
-                Part cap { sweptRoundedRect (0, 0, r, 14,
-                                             { { 0.0f, 0.0f }, { 0.0f, 0.006f }, { -0.002f, 0.010f },
-                                               { -0.002f, top - 0.016f }, { -0.008f, top - 0.004f },
-                                               { -0.018f, top }, { -0.026f, top - 0.003f } }, true),
+                Relief knurl;
+                if (carved)
+                    knurl = { 72, 0.022f, 0.012f, top - 0.020f, 0.004f, 0.9f };   // fine straight V-knurl
+                Part cap { lathe (r, { { 0.0f, 0.0f }, { 0.0f, 0.006f }, { -0.002f, 0.010f },
+                                       { -0.002f, top - 0.016f }, { -0.008f, top - 0.004f },
+                                       { -0.018f, top }, { -0.026f, top - 0.003f } }, seg, true, knurl),
                            Role::metal, true, { 0.80f, 0.80f, 0.82f } };
                 cap.polish = 0.45f;
                 cap.brushedRings = true;
                 m.parts.push_back (std::move (cap));
                 // engraved indicator dot near the edge
                 MeshData dot;
-                dot.append (sweptRoundedRect (0, 0, r * 0.12f, 4, { { 0.0f, top - 0.0005f }, { 0.0f, top + 0.0025f } }, true),
+                dot.append (lathe (r * 0.12f, { { 0.0f, top - 0.0005f }, { 0.0f, top + 0.0025f } }, std::max (16, seg / 4), true),
                             Mat4::translation ({ 0.0f, 0.0f, -r * 0.68f }));
                 m.parts.push_back ({ std::move (dot), Role::body, true, { 0.02f, 0.02f, 0.02f } });
                 m.height = top;
@@ -107,11 +139,17 @@ namespace hwk::models
             case KnobStyle::softTouch:
             {
                 const float top = r * 1.15f;
-                m.parts.push_back ({ sweptRoundedRect (0, 0, r, 12,
-                                                       { { 0.005f, 0.0f }, { 0.004f, 0.010f }, { 0.0f, top * 0.78f },
-                                                         { -0.008f, top * 0.92f }, { -0.026f, top } }, true),
+                m.parts.push_back ({ lathe (r, { { 0.005f, 0.0f }, { 0.004f, 0.010f }, { 0.0f, top * 0.78f },
+                                                 { -0.008f, top * 0.92f }, { -0.026f, top } }, seg, true),
                                      Role::body, true, { 0.23f, 0.23f, 0.25f }, 36.0f, top * 0.76f });
-                m.parts.push_back ({ sweptRoundedRect (0, 0, r * 0.62f, 10, { { 0.0f, top - 0.004f }, { -0.006f, top + 0.006f } }, true),
+                if (carved)   // a thin polished trim ring round the cap
+                {
+                    Part trim { lathe (r * 0.66f, { { 0.0f, top - 0.002f }, { 0.0f, top + 0.003f }, { -0.003f, top + 0.005f } }, seg, false),
+                                Role::metal, true, { 0.86f, 0.86f, 0.88f } };
+                    trim.polish = 0.85f;
+                    m.parts.push_back (std::move (trim));
+                }
+                m.parts.push_back ({ lathe (r * 0.62f, { { 0.0f, top - 0.004f }, { -0.006f, top + 0.006f } }, seg, true),
                                      Role::accent, true, accent });
                 m.parts.push_back ({ geo::box ({ -0.005f, top + 0.006f, -(r * 0.60f) }, { 0.005f, top + 0.0085f, -r * 0.12f }), Role::pointer, true, { 0.97f, 0.97f, 0.99f } });
                 m.height = top + 0.006f;
@@ -121,46 +159,70 @@ namespace hwk::models
             case KnobStyle::jewelCap:
             {
                 const float top = r * 1.2f;
-                m.parts.push_back ({ sweptRoundedRect (0, 0, r, 12, { { 0.008f, 0.0f }, { 0.0f, 0.03f }, { 0.0f, top - 0.03f } }, false),
+                m.parts.push_back ({ lathe (r, { { 0.008f, 0.0f }, { 0.0f, 0.03f }, { 0.0f, top - 0.03f } }, seg, false),
                                      Role::body, true, { 0.03f, 0.03f, 0.034f }, 40.0f, top - 0.03f });
-                Part cap { sweptRoundedRect (0, 0, r, 12, { { 0.0f, top - 0.03f }, { 0.0f, top - 0.012f }, { -0.014f, top } }, true),
+                Part cap { lathe (r, { { 0.0f, top - 0.03f }, { 0.0f, top - 0.012f }, { -0.014f, top } }, seg, true),
                            Role::metal, true, { 0.86f, 0.85f, 0.88f } };
                 cap.polish = 0.9f;
                 m.parts.push_back (std::move (cap));
-                m.parts.push_back ({ sweptRoundedRect (0, 0, r * 0.30f, 8, { { 0.0f, top }, { -r * 0.12f, top + 0.018f } }, true),
+                m.parts.push_back ({ lathe (r * 0.30f, { { 0.0f, top }, { -r * 0.12f, top + 0.018f } }, seg / 2, true),
                                      Role::accent, true, accent });
                 m.parts.push_back ({ pointerLine (r, top + 0.001f, 0.005f, r * 0.42f), Role::pointer, true, { 0.97f, 0.97f, 0.99f } });
                 m.height = top + 0.018f;
                 break;
             }
+
             case KnobStyle::skirted:
             {
-                // Machined skirt at the base, black cone above it, white line down the flank -
-                // the knob you find on an outboard compressor.
+                // Outboard-gear knob: machined skirt, black ribbed cone, white line down the flank, and
+                // (close up) a set screw in the skirt and an anodised cap insert in the unit's colour.
                 const float skirtR = r * 1.26f, top = r * 1.05f;
                 m.footprintRadius = skirtR;
 
-                // Machined skirt: a knurled flank, a step, and a polished chamfer on top
-                Part skirt { sweptRoundedRect (0, 0, skirtR, 14,
-                                               { { 0.0f, 0.0f }, { 0.0f, 0.014f }, { -0.002f, 0.018f },
-                                                 { -0.002f, 0.024f }, { -0.008f, 0.030f } }, true),
+                Relief skirtKnurl;
+                if (carved)
+                    skirtKnurl = { 96, 0.014f, 0.003f, 0.017f, 0.002f, 0.9f };
+                Part skirt { lathe (skirtR, { { 0.0f, 0.0f }, { 0.0f, 0.014f }, { -0.002f, 0.018f },
+                                              { -0.002f, 0.024f }, { -0.008f, 0.030f } }, seg, true, skirtKnurl),
                              Role::metal, true, { 0.74f, 0.74f, 0.77f } };
                 skirt.polish = 0.42f;
                 skirt.brushedRings = true;
                 m.parts.push_back (std::move (skirt));
 
-                // Body: tapers inward toward the top, with fine grip ridges on the flank
-                m.parts.push_back ({ sweptRoundedRect (0, 0, r, 14,
-                                                       { { 0.0f, 0.028f }, { -0.003f, 0.040f }, { -0.006f, 0.052f },
-                                                         { -r * 0.30f, top - 0.012f }, { -r * 0.38f, top - 0.002f },
-                                                         { -r * 0.48f, top - 0.008f } }, true),
-                                     Role::body, true, { 0.035f, 0.035f, 0.038f }, 44.0f, top - 0.02f });
+                Relief ribs;
+                if (carved)
+                    ribs = { 44, 0.030f, 0.036f, top - 0.022f, 0.006f, 0.30f };
+                m.parts.push_back ({ lathe (r, { { 0.0f, 0.028f }, { -0.003f, 0.040f }, { -0.006f, 0.052f },
+                                                 { -r * 0.30f, top - 0.012f }, { -r * 0.38f, top - 0.002f },
+                                                 { -r * 0.48f, top - 0.008f } }, seg, true, ribs),
+                                     Role::body, true, { 0.035f, 0.035f, 0.038f }, carved ? 0.0f : 44.0f, top - 0.02f });
 
                 // Pointer: a line down the sloping flank, reaching the skirt
                 m.parts.push_back ({ geo::box ({ -0.0055f, 0.024f, -(skirtR - 0.004f) }, { 0.0055f, 0.030f, -(r - 0.012f) }),
                                      Role::pointer, true, { 0.96f, 0.96f, 0.98f } });
-                m.parts.push_back ({ pointerLine (r * 0.78f, top - 0.004f, 0.0055f, r * 0.10f),
-                                     Role::pointer, true, { 0.96f, 0.96f, 0.98f } });
+
+                if (carved)
+                {
+                    // Anodised cap insert, in the unit's colour (muted), with the pointer line across it
+                    Part cap { lathe (r * 0.40f, { { 0.0f, top - 0.0085f }, { 0.0f, top - 0.004f }, { -0.003f, top - 0.0015f } }, seg, true),
+                               Role::metal, true, accent };
+                    cap.polish = 0.30f;
+                    cap.brushedRings = true;
+                    m.parts.push_back (std::move (cap));
+                    m.parts.push_back ({ geo::box ({ -0.0045f, top - 0.0020f, -(r * 0.40f - 0.004f) }, { 0.0045f, top - 0.0005f, -r * 0.08f }),
+                                         Role::pointer, true, { 0.96f, 0.96f, 0.98f } });
+
+                    // Set screw in the skirt, opposite the pointer
+                    MeshData screw;
+                    screw.append (lathe (0.0055f, { { 0.0f, -0.0015f }, { 0.0f, 0.0015f } }, 16, true),
+                                  Mat4::translation ({ 0.0f, 0.010f, skirtR - 0.0015f }) * Mat4::rotationX (0.5f * geo::kPi));
+                    m.parts.push_back ({ std::move (screw), Role::body, true, { 0.012f, 0.012f, 0.014f } });
+                }
+                else
+                {
+                    m.parts.push_back ({ pointerLine (r * 0.78f, top - 0.004f, 0.0055f, r * 0.10f),
+                                         Role::pointer, true, { 0.96f, 0.96f, 0.98f } });
+                }
                 m.shadowRadius = skirtR;
                 m.height = top;
                 break;
@@ -233,23 +295,61 @@ namespace hwk::models
     }
 
     //==============================================================================
-    Model pushButton (float halfW, float halfD)
+    Model pushButton (float halfW, float halfD, int detail)
     {
         Model m;
         constexpr float rc = 0.016f, r = 0.010f;
+        const int corner = segmentsFor (detail) / 10 + 3;   // 6 .. 28 per corner
         // Collar: a bezel standing off the panel with a chamfer into the well the cap sits in
-        m.parts.push_back ({ sweptRoundedRect (halfW + 0.016f - rc, halfD + 0.016f - rc, rc, 6,
+        m.parts.push_back ({ sweptRoundedRect (halfW + 0.016f - rc, halfD + 0.016f - rc, rc, corner,
                                                { { 0.0f, 0.0f }, { 0.0f, 0.009f }, { -0.004f, 0.014f },
                                                  { -0.010f, 0.014f }, { -0.012f, 0.008f }, { -0.012f, 0.002f } }, false),
                              Role::body, false, { 0.018f, 0.018f, 0.020f } });
 
         // Cap: square-ish, chamfered all round, with a dished top that catches the light
-        m.parts.push_back ({ sweptRoundedRect (halfW - r, halfD - r, r, 6,
+        m.parts.push_back ({ sweptRoundedRect (halfW - r, halfD - r, r, corner,
                                                { { 0.0f, 0.004f }, { 0.0f, 0.040f }, { -0.005f, 0.050f },
                                                  { -0.014f, 0.054f }, { -0.022f, 0.051f } }, true),
                              Role::accent, true, { 0.40f, 0.41f, 0.43f } });   // "rotates" = moves with the press
         m.footprintRadius = std::max (halfW, halfD) + 0.014f;
         m.height = 0.054f;
+        return m;
+    }
+
+    //==============================================================================
+    Model rockerSwitch (int detail)
+    {
+        // A panel rocker: chamfered bezel with a dark well, and a satin paddle that rocks about its middle,
+        // marked I (on) at the -z end and O (off) at the +z end. The paddle and its marks are the parts
+        // that move: rotate them about x at rockerPivotY.
+        Model m;
+        const int corner = segmentsFor (detail) / 16 + 2;   // 4 .. 18 per corner
+        constexpr float bw = rockerHalfW, bd = rockerHalfD, rc = 0.012f;
+
+        m.parts.push_back ({ sweptRoundedRect (bw - rc, bd - rc, rc, corner,
+                                               { { 0.0f, 0.0f }, { 0.0f, 0.007f }, { -0.003f, 0.011f }, { -0.008f, 0.012f },
+                                                 { -0.0105f, 0.010f }, { -0.0105f, -0.014f } }, false),
+                             Role::body, false, { 0.020f, 0.020f, 0.022f } });
+        m.parts.push_back ({ geo::horizontalQuad ({ 0.0f, 0.0f, bw - 0.010f, bd - 0.010f }, -0.013f), Role::body, false, { 0.004f, 0.004f, 0.005f } });
+
+        // Paddle, built about its pivot (y = 0 here = rockerPivotY on the panel)
+        constexpr float pw = bw - 0.0125f, pd = bd - 0.0125f, pr = 0.006f, topY = 0.016f;
+        Part paddle { sweptRoundedRect (pw - pr, pd - pr, pr, corner,
+                                        { { 0.0f, -0.020f }, { 0.0f, topY - 0.004f }, { -0.0015f, topY - 0.001f }, { -0.004f, topY } }, true),
+                      Role::body, true, { 0.045f, 0.045f, 0.050f } };
+        m.parts.push_back (std::move (paddle));
+
+        // I and O, raised a hair above the paddle so they print cleanly at any distance
+        const float markY = topY + 0.0006f;
+        m.parts.push_back ({ geo::box ({ -0.0032f, markY - 0.0004f, -pd + 0.012f }, { 0.0032f, markY + 0.0004f, -pd + 0.036f }),
+                             Role::pointer, true, { 0.93f, 0.93f, 0.95f } });
+        MeshData o;
+        o.append (geo::flatAnnulus (0.0062f, 0.0100f, std::max (16, segmentsFor (detail) / 4)), Mat4::translation ({ 0.0f, markY, pd - 0.024f }));
+        m.parts.push_back ({ std::move (o), Role::pointer, true, { 0.93f, 0.93f, 0.95f } });
+
+        m.footprintRadius = bd;
+        m.height = rockerPivotY + topY;
+        m.shadowRadius = bw;
         return m;
     }
 
@@ -314,9 +414,9 @@ namespace hwk::models
         /*  A moulded LED, not a hemisphere: a short cylindrical body with the flange that
             comes out of the mould, then the domed lens on top. Unit radius; scale when drawing. */
         MeshData m;
-        m.append (sweptRoundedRect (0, 0, 1.06f, 14, { { 0.0f, 0.0f }, { 0.0f, 0.16f }, { -0.06f, 0.22f } }, false));
-        m.append (sweptRoundedRect (0, 0, 1.0f, 14, { { 0.0f, 0.20f }, { 0.0f, 0.40f } }, false));
-        m.append (geo::dome (1.0f, 0.62f, 14, 4), gfx::Mat4::translation ({ 0.0f, 0.40f, 0.0f }));
+        m.append (sweptRoundedRect (0, 0, 1.06f, 12, { { 0.0f, 0.0f }, { 0.0f, 0.16f }, { -0.06f, 0.22f } }, false));
+        m.append (sweptRoundedRect (0, 0, 1.0f, 12, { { 0.0f, 0.20f }, { 0.0f, 0.40f } }, false));
+        m.append (geo::dome (1.0f, 0.62f, 48, 8), gfx::Mat4::translation ({ 0.0f, 0.40f, 0.0f }));
         return m;
     }
 

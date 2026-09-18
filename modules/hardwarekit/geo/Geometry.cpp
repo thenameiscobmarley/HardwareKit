@@ -71,6 +71,101 @@ namespace hwk::geo
         return mesh;
     }
 
+    MeshData lathe (float radius, const std::vector<ProfilePoint>& profile, int segments, bool capTop, const Relief& relief)
+    {
+        MeshData mesh;
+        jassert (profile.size() >= 1 && segments >= 3);
+
+        // How much of the relief applies at height y (eased at the ends of its band)
+        auto band = [&] (float y)
+        {
+            if (relief.count <= 0 || y < relief.yFrom || y > relief.yTo)
+                return 0.0f;
+            const float e = std::max (1.0e-5f, relief.ease);
+            const float t = std::min ({ 1.0f, (y - relief.yFrom) / e, (relief.yTo - y) / e });
+            return t * t * (3.0f - 2.0f * t);
+        };
+
+        // Groove shape around the circumference, 0 (land) .. 1 (bottom of a groove)
+        auto groove = [&] (float angle)
+        {
+            const float c = 0.5f + 0.5f * std::cos (angle * (float) relief.count);   // 1 at a land
+            const float sharp = std::pow (c, 1.0f + 3.0f * relief.sharpness);
+            return 1.0f - sharp;
+        };
+
+        auto point = [&] (float angle, float outset, float y)
+        {
+            const float r = std::max (0.0f, (radius + outset) * (1.0f - relief.depth * band (y) * groove (angle)));
+            return Vec3 { std::sin (angle) * r, y, -std::cos (angle) * r };   // angle 0 at -z, like a knob's pointer
+        };
+
+        const float step = 2.0f * kPi / (float) segments;
+
+        for (size_t k = 0; k + 1 < profile.size(); ++k)
+        {
+            const auto p0 = profile[k], p1 = profile[k + 1];
+            const bool relieved = relief.count > 0 && std::max (p0.y, p1.y) > relief.yFrom && std::min (p0.y, p1.y) < relief.yTo;
+            const int rows = relieved ? 4 : 1;
+            const auto base = (juce::uint32) mesh.vertices.size();
+
+            for (int j = 0; j <= segments; ++j)
+            {
+                const float a = step * (float) j;
+                for (int r = 0; r <= rows; ++r)
+                {
+                    const float t = (float) r / (float) rows;
+                    const float outset = p0.outset + (p1.outset - p0.outset) * t, y = p0.y + (p1.y - p0.y) * t;
+                    const auto p = point (a, outset, y);
+
+                    // Normal from the surface's own tangents (around, and along the profile)
+                    const float h = 1.0e-3f;
+                    const auto da = point (a + h, outset, y) - point (a - h, outset, y);
+                    const float dt = 1.0f / (float) rows * 0.25f;
+                    const float t0 = std::max (0.0f, t - dt), t1 = std::min (1.0f, t + dt);
+                    const auto q0 = point (a, p0.outset + (p1.outset - p0.outset) * t0, p0.y + (p1.y - p0.y) * t0);
+                    const auto q1 = point (a, p0.outset + (p1.outset - p0.outset) * t1, p0.y + (p1.y - p0.y) * t1);
+                    // Oriented like the profile's own outward normal (as sweptRoundedRect does it)
+                    const float dd = p1.outset - p0.outset, dy = p1.y - p0.y;
+                    const float len = std::max (1.0e-6f, std::sqrt (dd * dd + dy * dy));
+                    const Vec3 radial { std::sin (a), 0.0f, -std::cos (a) };
+                    const Vec3 reference = radial * (dy / len) + Vec3 { 0.0f, -dd / len, 0.0f };
+                    auto n = gfx::normalise (gfx::cross (q1 - q0, da));
+                    if (gfx::dot (n, reference) < 0.0f)
+                        n = -n;
+                    if (gfx::length (gfx::cross (q1 - q0, da)) < 1.0e-12f)
+                        n = reference;
+                    mesh.addVertex (p, n, (float) j / (float) segments, y);
+                }
+            }
+
+            const auto stride = (juce::uint32) (rows + 1);
+            for (int j = 0; j < segments; ++j)
+                for (int r = 0; r < rows; ++r)
+                {
+                    const auto i0 = base + (juce::uint32) j * stride + (juce::uint32) r;
+                    const auto i1 = base + (juce::uint32) (j + 1) * stride + (juce::uint32) r;
+                    mesh.addQuad (i0, i1, i1 + 1, i0 + 1);
+                }
+        }
+
+        if (capTop)
+        {
+            const auto last = profile.back();
+            const auto centre = mesh.addVertex ({ 0, last.y, 0 }, { 0, 1, 0 }, 0.5f, 0.5f);
+            const auto base = (juce::uint32) mesh.vertices.size();
+            for (int j = 0; j <= segments; ++j)
+            {
+                const auto p = point (step * (float) j, last.outset, last.y);
+                mesh.addVertex (p, { 0, 1, 0 }, p.x, p.z);
+            }
+            for (int j = 0; j < segments; ++j)
+                mesh.addTriangle (centre, base + (juce::uint32) j, base + (juce::uint32) j + 1);
+        }
+
+        return mesh;
+    }
+
     MeshData sweptPolygon (int sides, float radius, const std::vector<ProfilePoint>& profile, bool capTop)
     {
         MeshData mesh;

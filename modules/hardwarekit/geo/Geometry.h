@@ -31,6 +31,21 @@ namespace hwk::geo
     MeshData sweptRoundedRect (float halfW, float halfD, float radius, int cornerSegments,
                                const std::vector<ProfilePoint>& profile, bool capTop);
 
+    /** Relief cut around a lathe part: grip knurling, flutes, a fluted skirt.
+        count grooves around, `depth` of radius (fraction), only between yFrom and yTo (eased in and out
+        over `ease`). sharpness 0 = rounded flutes, 1 = crisp V knurl. */
+    struct Relief
+    {
+        int count = 0;
+        float depth = 0.0f, yFrom = 0.0f, yTo = 0.0f, ease = 0.004f, sharpness = 0.5f;
+    };
+
+    /** Surface of revolution about y: `profile` (outset from `radius`, y) turned through 360 degrees in
+        `segments` steps, with an optional relief cut into it. Every profile segment keeps its own
+        normals (crisp bevels); inside a relief the surface is subdivided and its normals follow the
+        cut, so knurling is real geometry that catches the light, not a painted pattern. */
+    MeshData lathe (float radius, const std::vector<ProfilePoint>& profile, int segments, bool capTop, const Relief& relief = {});
+
     /** Regular prism (e.g. a hex nut): the profile swept around a `sides`-gon with flat faces. */
     MeshData sweptPolygon (int sides, float radius, const std::vector<ProfilePoint>& profile, bool capTop);
 
