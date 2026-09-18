@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+
 /*  HardwareKit materials.
 
     One shared vertex shader; each material is a GLSL snippet placed inside a common fragment main()
@@ -25,6 +27,12 @@ namespace hwk::shaders
 
     /** Full fragment shader source ("#version 150" included). */
     juce::String fragmentSource (const Material&);
+
+    /** A surface's three wear scratches (see wearMarks in the shader header), worked out once on the CPU
+        instead of for every pixel: per scratch its two ends and its opacity (ax, ay, bx, by, opacity).
+        Set as the uWear uniform on the panel materials; `seed` is what the material used to pass
+        (the unit's seed plus the material's offset: anodised 0, lacquer 3, brushed 7). */
+    std::array<float, 15> wearUniforms (float seed, float scale = 1.0f) noexcept;
 
     /** Built-in materials. */
     namespace library

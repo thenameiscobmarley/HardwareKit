@@ -48,6 +48,7 @@ uniform vec3  uGlow;
 
 uniform sampler2D uTex;
 uniform sampler2D uTex2;
+uniform float uWear[15];   // the surface's three scratches: ends and opacity (wearUniforms, set per draw)
 
 const vec3 skyCol    = vec3 (0.80, 0.74, 0.80);
 const vec3 groundCol = vec3 (0.30, 0.22, 0.23);
@@ -111,26 +112,17 @@ float scratchLine (vec2 p, vec2 a, vec2 b, float width)
 
 float wearMarks (vec2 p, float seed, float scale)
 {
+    // The scratches' ends and opacity are worked out once per surface on the CPU (wearUniforms):
+    // per pixel only the distance to each is left
     float total = 0.0;
     for (int i = 0; i < 3; ++i)
     {
-        float fi = float (i);
-        float r1 = hash12 (vec2 (seed * 7.1 + fi, 3.7));
-        float r2 = hash12 (vec2 (seed * 3.3 + fi, 9.1));
-        float r3 = hash12 (vec2 (seed * 5.9 + fi, 1.3));
-        float r4 = hash12 (vec2 (seed * 2.7 + fi, 6.5));
-
-        vec2 a = (vec2 (r1, r2) - 0.5) * 1.8 * scale;
-        float ang = (r3 - 0.5) * 0.9;                       // shallow angles, as if wiped
-        float len = (0.18 + 0.55 * r4) * scale;
-        vec2 b = a + vec2 (cos (ang), sin (ang) * 0.35) * len;
-
-        float opacity = 0.25 + 0.75 * hash12 (vec2 (seed + fi * 11.0, 17.0));
-        total = max (total, scratchLine (p, a, b, 0.0016 * scale) * opacity);
+        vec2 a = vec2 (uWear[i * 5], uWear[i * 5 + 1]);
+        vec2 b = vec2 (uWear[i * 5 + 2], uWear[i * 5 + 3]);
+        total = max (total, scratchLine (p, a, b, 0.0016 * scale) * uWear[i * 5 + 4]);
     }
     return total;
 }
-
 float patina (vec2 p)
 {
     return valueNoise (p * 1.7) * 0.6 + valueNoise (p * 5.3) * 0.4;
@@ -188,6 +180,40 @@ void main()
     col *= 1.0 - uVignette * 0.40 * pow (length (sp) * 1.25, 2.4);
     col += (hash12 (gl_FragCoord.xy) - 0.5) / 255.0;
 )GLSL";
+
+    namespace
+    {
+        // The shader's hash12, in the same float arithmetic
+        float fractF (float x) noexcept { return x - std::floor (x); }
+        float hash12 (float x, float y) noexcept
+        {
+            float p0 = fractF (x * 0.1031f), p1 = fractF (y * 0.1031f), p2 = fractF (x * 0.1031f);
+            const float d = p0 * (p1 + 33.33f) + p1 * (p2 + 33.33f) + p2 * (p0 + 33.33f);
+            p0 += d; p1 += d; p2 += d;
+            return fractF ((p0 + p1) * p2);
+        }
+    }
+
+    std::array<float, 15> wearUniforms (float seed, float scale) noexcept
+    {
+        std::array<float, 15> u {};
+        for (int i = 0; i < 3; ++i)
+        {
+            const float fi = (float) i;
+            const float r1 = hash12 (seed * 7.1f + fi, 3.7f), r2 = hash12 (seed * 3.3f + fi, 9.1f);
+            const float r3 = hash12 (seed * 5.9f + fi, 1.3f), r4 = hash12 (seed * 2.7f + fi, 6.5f);
+            const float ax = (r1 - 0.5f) * 1.8f * scale, ay = (r2 - 0.5f) * 1.8f * scale;
+            const float ang = (r3 - 0.5f) * 0.9f;                 // shallow angles, as if wiped
+            const float len = (0.18f + 0.55f * r4) * scale;
+            const auto k = (size_t) i * 5;
+            u[k] = ax;
+            u[k + 1] = ay;
+            u[k + 2] = ax + std::cos (ang) * len;
+            u[k + 3] = ay + std::sin (ang) * 0.35f * len;
+            u[k + 4] = 0.25f + 0.75f * hash12 (seed + fi * 11.0f, 17.0f);
+        }
+        return u;
+    }
 
     juce::String fragmentSource (const Material& m)
     {
