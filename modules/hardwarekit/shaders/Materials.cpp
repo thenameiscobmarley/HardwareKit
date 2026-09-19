@@ -309,6 +309,31 @@ void main()
     col += uEmissive;
 )GLSL" };
 
+        const Material walnut { "walnut", R"GLSL(
+    // Oiled walnut. uBaseColor = the wood's mid tone (stain), uParams.x = grain direction
+    // (0: along the case's arc, 1: across, along x). Figure from rings bent by slow noise, open pores
+    // along the grain; every stripe fades to its average once it is finer than a pixel (no moire).
+    float along  = mix (vWorld.y + vWorld.z * 0.35, vWorld.x, uParams.x);
+    float across = mix (vWorld.x + vWorld.z * 0.80, vWorld.y + vWorld.z * 0.50, uParams.x);
+    float warp = valueNoise (vec2 (along * 1.3, across * 3.0)) * 2.0 + valueNoise (vec2 (along * 0.45, across * 9.0));
+    float ring = across * 36.0 + warp * 3.4;
+    float ringAA = clamp (1.0 - fwidth (ring) * 0.55, 0.0, 1.0);
+    float grain = mix (0.5, 0.5 + 0.5 * sin (ring), ringAA);
+    float fine = mix (0.5, 0.5 + 0.5 * sin (ring * 5.3 + warp * 7.0), clamp (1.0 - fwidth (ring * 5.3) * 0.6, 0.0, 1.0));
+    vec2 poreAt = vec2 (along * 60.0, across * 700.0);
+    float pores = (valueNoise (poreAt) - 0.5) * noiseAA (length (fwidth (poreAt)));
+    float figure = patina (vec2 (along * 0.8, across * 2.5));
+
+    vec3 dark = uBaseColor * 0.55, light = uBaseColor * 1.30;
+    vec3 albedo = mix (dark, light, clamp (0.15 + grain * 0.55 + fine * 0.15 + figure * 0.25, 0.0, 1.0));
+    albedo *= 1.0 + pores * 0.35;
+
+    col  = albedo * (amb * 0.55 + wrap * lightCol * 0.78 + fill);
+    // Oil finish: a soft sheen, a little sharper highlight, the room in it at grazing angles
+    col += lightCol * (pow (ndh, 70.0) * 0.22 + pow (ndh, 12.0) * 0.035) * (0.8 + 0.4 * grain);
+    col += envColor (R) * (0.015 + 0.20 * pow (facing, 5.0));
+)GLSL" };
+
         const Material woodTable { "woodTable", R"GLSL(
     vec2 p = vWorld.xz;
     float grain = sin (p.x * 6.0 + sin (p.y * 1.2 + p.x * 0.35) * 2.4 + sin (p.y * 0.29) * 4.0);

@@ -43,6 +43,7 @@ namespace hwk::shaders
         extern const Material chrome;         // uParams.x polish, uParams.y > 0.5 brushed rings
         extern const Material plastic;        // uParams.x ridge count, uParams.y ridges below local y; uEmissive = hover lift
         extern const Material woodTable;
+        extern const Material walnut;         // oiled walnut, fwidth-antialiased grain. uBaseColor = stain, uParams.x = grain along x
         extern const Material emissive;       // LEDs / lamps / vents. uEmissive, uGlow * uParams.x
         extern const Material recess;         // cavity walls. uParams.x depth, uGlow
         extern const Material printRing;      // alpha-blended printed ring. uParams = (outer radius, _, blend uTex->uTex2, accent)
