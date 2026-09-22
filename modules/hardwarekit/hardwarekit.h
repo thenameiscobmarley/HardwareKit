@@ -9,6 +9,7 @@
                       GL helpers, control animation and a fisheye loupe for plugin UIs.
   dependencies:       juce_opengl juce_gui_basics
   linuxLibs:          X11
+  windowsLibs:        user32
   minimumCppStandard: 17
 
  END_JUCE_MODULE_DECLARATION
