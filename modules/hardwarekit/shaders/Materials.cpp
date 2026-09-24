@@ -128,23 +128,19 @@ float patina (vec2 p)
     return valueNoise (p * 1.7) * 0.6 + valueNoise (p * 5.3) * 0.4;
 }
 
-/*  Light from a window off to the upper left, out of shot: broad bands with softer light
-    between them, so the rack is lit unevenly the way a real room lights it. */
-/*  Light from a window off to the upper left: broad shafts with hard edges, because that is
-    what direct sun through glazing bars actually looks like. Between them the surface is lit
-    only by what bounces around the room, which is much darker and cooler. */
+/*  Light from a window off to the upper left: three broad shafts of warm sun with soft, wide edges
+    (a big window, a little haze), falling across the rack without cutting it into bars. */
 float windowBeam (vec3 world)
 {
     float across = dot (world, normalize (vec3 (0.80, 0.56, 0.20)));
 
-    // Three shafts: wide, hard-edged, with a narrow penumbra
     float b = 0.0;
-    b += smoothstep (1.62, 1.34, abs (across - 0.35));
-    b += 0.92 * smoothstep (1.05, 0.82, abs (across + 1.75));
-    b += 0.75 * smoothstep (0.95, 0.72, abs (across - 2.85));
+    b += smoothstep (1.95, 1.05, abs (across - 0.35));
+    b += 0.80 * smoothstep (1.35, 0.55, abs (across + 1.75));
+    b += 0.65 * smoothstep (1.25, 0.45, abs (across - 2.85));
 
-    // A little scatter outside the shaft, so the edge is not a cut-out
-    float spill = 0.10 * smoothstep (2.6, 1.2, abs (across - 0.35));
+    // Haze: light scattered around the shafts
+    float spill = 0.18 * smoothstep (3.2, 1.0, abs (across - 0.35));
     return clamp (b + spill, 0.0, 1.6);
 }
 )GLSL";
@@ -164,10 +160,11 @@ void main()
     float facing = 1.0 - ndv;
 
     float beam = windowBeam (vWorld);
-    // In the shaft: bright, warm, directional. Out of it: cool bounce light only.
-    vec3 lightCol = mix (vec3 (0.26, 0.29, 0.38), vec3 (2.30, 2.05, 1.72), clamp (beam, 0.0, 1.0));
-    vec3 amb  = mix (groundCol, skyCol, N.y * 0.5 + 0.5) * (0.34 + 0.66 * clamp (beam, 0.0, 1.0));
-    float fill = max (dot (N, normalize (vec3 (0.75, 0.35, 0.9))), 0.0) * (0.06 + 0.20 * clamp (beam, 0.0, 1.0));
+    // In the shaft: bright, warm, directional. Out of it: the room's bounce - softer and a little
+    // cooler, but enough to read every panel by (a lamp and the walnut around it warm it up)
+    vec3 lightCol = mix (vec3 (0.62, 0.58, 0.60), vec3 (2.10, 1.88, 1.58), clamp (beam, 0.0, 1.0));
+    vec3 amb  = mix (groundCol, skyCol, N.y * 0.5 + 0.5) * (0.58 + 0.42 * clamp (beam, 0.0, 1.0));
+    float fill = max (dot (N, normalize (vec3 (0.75, 0.35, 0.9))), 0.0) * (0.12 + 0.16 * clamp (beam, 0.0, 1.0));
     vec3 R = reflect (-V, N);
 
     vec3 col = vec3 (0.0);
@@ -177,7 +174,7 @@ void main()
     static const char* const postProcess = R"GLSL(
     col = col * (1.0 + col / 4.0) / (1.0 + col);
     vec2 sp = gl_FragCoord.xy / uViewport - 0.5;
-    col *= 1.0 - uVignette * 0.40 * pow (length (sp) * 1.25, 2.4);
+    col *= 1.0 - uVignette * 0.34 * pow (length (sp) * 1.25, 2.4);
     col += (hash12 (gl_FragCoord.xy) - 0.5) / 255.0;
 )GLSL";
 
@@ -508,16 +505,16 @@ void main()
     float dist = length (d);
     float ang = atan (d.y, d.x);
 
-    // Hard-edged shafts, matching the ones lighting the hardware
+    // Soft shafts, matching the ones lighting the hardware
     float shaft = 0.0;
-    shaft += smoothstep (0.150, 0.095, abs (ang + 1.06));
-    shaft += 0.80 * smoothstep (0.105, 0.062, abs (ang + 0.80));
-    shaft += 0.62 * smoothstep (0.090, 0.050, abs (ang + 1.34));
+    shaft += smoothstep (0.200, 0.060, abs (ang + 1.06));
+    shaft += 0.75 * smoothstep (0.140, 0.035, abs (ang + 0.80));
+    shaft += 0.55 * smoothstep (0.125, 0.030, abs (ang + 1.34));
     shaft *= 0.80 + 0.20 * valueNoise (vec2 (ang * 14.0, dist * 4.0 - uTime * 0.03));
     shaft *= smoothstep (2.10, 0.30, dist);
 
     vec3 warm = vec3 (1.00, 0.90, 0.74);
-    col = warm * shaft * 0.16;
+    col = warm * shaft * 0.11;
     col += warm * exp (-dist * 2.0) * 0.07;
 
     alpha = uParams.x;
