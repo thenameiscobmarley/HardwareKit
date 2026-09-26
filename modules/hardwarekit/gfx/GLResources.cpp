@@ -159,6 +159,8 @@ namespace hwk::gfx
     void ShaderProgram::set (const char* n, float a, float b, float c, float d) { glUniform4f (uniform (n), a, b, c, d); }
     void ShaderProgram::set (const char* n, const Mat4& m)      { glUniformMatrix4fv (uniform (n), 1, GL_FALSE, m.m.data()); }
     void ShaderProgram::setArray (const char* n, const float* v, int count) { glUniform1fv (uniform (n), count, v); }
+    void ShaderProgram::setArray3 (const char* n, const float* v, int count) { glUniform3fv (uniform (n), count, v); }
+    void ShaderProgram::setArray4 (const char* n, const float* v, int count) { glUniform4fv (uniform (n), count, v); }
 
     //==============================================================================
     void Texture2D::upload (const juce::uint8* data, int width, int height, int channels, bool mipmaps, int anisotropy)

@@ -29,6 +29,7 @@ namespace hwk::models
         float ridges = 0.0f;          // grip ridges drawn by the plastic material (0 = smooth)
         float ridgesBelowY = 0.0f;    // ridges only below this height
         float polish = 0.6f;          // metal: 0 satin .. 1 mirror
+        float gloss = 1.0f;           // plastic: 1 glossy (lacquered) .. 0 matte (soft-touch, bead-blasted)
         bool brushedRings = false;    // metal: concentric machining rings
     };
 
@@ -75,6 +76,12 @@ namespace hwk::models
         pointerBarBlack, pointerBarSilver, milSpecPointer,
         hifiDisc, hifiBlackDisc, hifiDimple, gunmetalCap,
         guitarTopHat, guitarSpeed, guitarDome, amberInstrument, oxbloodInstrument,
+        // Classic studio gear (from photographs): the program EQ's fluted bakelite top hat, the FET limiter's
+        // knurled aluminium, the optical leveler's fluted skirt, a small ribbed black, the modern channel's
+        // smooth matte black and red anodised trim, the vintage channel's maroon, dark grey and small grey,
+        // the 500-series coloured caps, the passive mastering EQ's ribbed pointer
+        pultecTopHat, fetSilver, la2aFluted, smallRibbed, porticoBlack, porticoRed,
+        neveMaroon, neveGrey, neveSmallGrey, apiBlue, apiRed, apiWhite, manleyRibbed,
         count
     };
 
@@ -163,7 +170,7 @@ namespace hwk::models
         Parts, in order: case, bezel, face (Role::screen, uv 0..1 across the window),
         needle (Role::pointer, rotates), hub, glass (Role::glass).
         The needle pivot sits `pivotDrop` below the bottom of the face, off the visible dial. */
-    Model vuMeter (float halfW, float halfH, float depth, Vec3 bezelColour = { 0.10f, 0.11f, 0.13f });
+    Model vuMeter (float halfW, float halfH, float depth, Vec3 bezelColour = { 0.10f, 0.11f, 0.13f }, bool flush = false);   // flush: no bezel, glass set into the panel
 
     /** Sweep of a VU needle: angle for a 0..1 reading (radians about +y). */
     inline constexpr float vuSweep = 0.92f;   // ~53 degrees total

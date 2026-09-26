@@ -34,6 +34,26 @@ namespace hwk::shaders
         (the unit's seed plus the material's offset: anodised 0, lacquer 3, brushed 7). */
     std::array<float, 15> wearUniforms (float seed, float scale = 1.0f) noexcept;
 
+    /** The room's diffuse light for uSH (set uShOn to 1): the room map (uEnv's format: equirectangular,
+        RGBA bytes storing sqrt (colour / range)) projected onto nine spherical harmonics and turned into
+        irradiance, 27 floats (nine RGB terms). `meanLuma` > 0 scales it so the light averaged over every
+        direction has that luminance (keeps a scene's exposure while the light takes the room's
+        direction and colour); 0 leaves it as the map says. Once, when the room is baked. */
+    /** Something standing on a panel, for bakePanelOcclusion: a sphere in the panel's space (x across,
+        y out of the panel, z down the panel). A knob is one as tall as it stands, half sunk in the panel if flat. */
+    struct OccluderSphere { float x, y, z, r; };
+
+    /** A panel's light map, baked once on the CPU so the shader reads it in one fetch (uOccMap): for every
+        point of the panel's face, traced in closed form against the spheres, r = ambient visibility (exact
+        sphere occlusion, Quilez) and g = the key light's soft shadow (its core fading past a few widths,
+        as a big window's does). RGBA bytes, `w` x `h`, covering x0 .. x0 + width, z0 .. z0 + height.
+        `light` is the direction towards the key light in the panel's space. */
+    std::vector<unsigned char> bakePanelOcclusion (int w, int h, float x0, float z0, float width, float height,
+                                                   const OccluderSphere* spheres, int count, const float light[3]);
+
+    std::array<float, 27> shIrradianceUniforms (const unsigned char* rgba, int width, int height, float range,
+                                                float meanLuma = 0.0f) noexcept;
+
     /** Built-in materials. */
     namespace library
     {

@@ -8,11 +8,22 @@ in vec2 aUV;
 
 uniform mat4 uModel;
 uniform mat4 uViewProj;
+// The lighting's slow-changing parts, per vertex (a fraction of the cost per pixel): see the header
+uniform vec3  uSH[9];
+uniform float uShOn;
+uniform mat4  uOccToPanel;
+uniform vec4  uOccRect;
+uniform vec2  uOccAtlas;
+uniform float uOccMapOn;
 
 out vec3 vWorld;
 out vec3 vNormal;
 out vec2 vUV;
 out vec3 vLocal;
+out vec3  vShAmb;     // the room's diffuse light for this normal
+out vec2  vOccUv;     // where this point is in its panel's light map
+out float vOccFlat;   // 1: the panel's face (or flat on it): the map applies
+out float vPlateAo;   // what stands on the panel: the plate's own occlusion of it, near it
 
 void main()
 {
@@ -21,6 +32,28 @@ void main()
     vNormal = mat3 (uModel) * aNormal;
     vUV     = aUV;
     vLocal  = aPos;
+
+    vShAmb = vec3 (0.0);
+    if (uShOn > 0.5)
+    {
+        vec3 n = normalize (vNormal);
+        vShAmb = max (vec3 (0.0), uSH[0] + uSH[1] * n.y + uSH[2] * n.z + uSH[3] * n.x
+                                + uSH[4] * (n.x * n.y) + uSH[5] * (n.y * n.z) + uSH[6] * (3.0 * n.z * n.z - 1.0)
+                                + uSH[7] * (n.x * n.z) + uSH[8] * (n.x * n.x - n.y * n.y));
+    }
+    vOccUv = vec2 (0.0);
+    vOccFlat = 0.0;
+    vPlateAo = 1.0;
+    if (uOccMapOn > 0.5)
+    {
+        vec3 p  = (uOccToPanel * world).xyz;
+        vec3 pn = normalize (mat3 (uOccToPanel) * vNormal);
+        vOccUv = vec2 (clamp ((p.x - uOccRect.x) * uOccRect.z, 0.002, 0.998),
+                       uOccAtlas.x + clamp ((p.z - uOccRect.y) * uOccRect.w, 0.01, 0.99) * uOccAtlas.y);
+        vOccFlat = smoothstep (0.004, 0.0008, p.y) * smoothstep (0.4, 0.85, pn.y);
+        float nearPlate = exp (-max (p.y, 0.0) / 0.012) * (1.0 - vOccFlat);
+        vPlateAo = 1.0 - 0.45 * nearPlate * (1.0 - clamp (pn.y, 0.0, 1.0));
+    }
     gl_Position = uViewProj * world;
 }
 )GLSL";
@@ -31,6 +64,10 @@ in vec3 vWorld;
 in vec3 vNormal;
 in vec2 vUV;
 in vec3 vLocal;
+in vec3  vShAmb;
+in vec2  vOccUv;
+in float vOccFlat;
+in float vPlateAo;
 
 out vec4 fragColor;
 
@@ -48,12 +85,51 @@ uniform vec3  uGlow;
 
 uniform sampler2D uTex;
 uniform sampler2D uTex2;
+uniform sampler2D uEnv;      // the room to reflect (envColor), when uEnvMix is 1
+uniform float uEnvMix;
+uniform float uEnvRange;
+uniform float uCoat;        // clear coat (0 = none): a wet / lacquered top layer mirroring the room
+uniform float uCoatLod;     // how sharp that mirror is (the room map's mip level)
+uniform vec4  uBounceGeo;   // one bounce of light (off when uBounceWood is black): x = the side walls' |x|
+uniform vec3  uBounceWood;  // (the case cheeks, facing inward), y = the floor's height, z = how far it carries,
+uniform vec3  uBounceFloor; // w = the floor's reach; the light they throw back (their colour x how lit they are)
+uniform sampler2D uSmudge;  // the coat's smudges (r) and wipe marks (g), tiling; used when uSmudgeOn is 1
+uniform float uSmudgeOn;
 uniform float uWear[15];   // the surface's three scratches: ends and opacity (wearUniforms, set per draw)
+uniform float uShOn;        // 1: ambient light comes from the room itself: uSH, its L2 spherical harmonics
+                            // turned into irradiance (shIrradianceUniforms), evaluated per vertex
+uniform sampler2D uOccMap;  // a light map per panel, baked on the CPU (bakePanelOcclusion): r = ambient
+uniform float uOccMapOn;    // visibility, g = key-light shadow. Read where uOccMapOn is 1: the vertex shader
+                            // takes each point into its panel's space (uOccToPanel: world -> x across, y out,
+                            // z down), uOccRect = (x0, z0, 1 / width, 1 / height) of the baked area and
+                            // uOccAtlas = (v0, v size) of this panel in the map
+
+float gAo = 1.0;           // this pixel's ambient visibility (0 .. 1), worked out in the prelude
+float gSpecOcc = 1.0;      // how much of the room its reflection still sees
 
 const vec3 skyCol    = vec3 (0.80, 0.74, 0.80);
 const vec3 groundCol = vec3 (0.30, 0.22, 0.23);
 
-vec3 envColor (vec3 r)
+/*  What a surface reflects. By default a simple studio worked out here; a plugin can give its own
+    room instead, baked into an equirectangular texture (uEnv: u = atan (x, z) around, 0.5 facing +z;
+    v = 0 straight up; colour stored as sqrt (c / uEnvRange)) and set uEnvMix to 1. */
+vec3 envAnalytic (vec3 r);
+vec3 gR = vec3 (0.0);     // this pixel's reflection vector, and where it falls on the room map: worked out once
+vec2 gEnvUv = vec2 (0.5); // in the prelude (an atan and an acos), shared by the material and the clear coat
+vec2 envUv (vec3 r) { return vec2 (atan (r.x, r.z) * 0.15915494 + 0.5, acos (clamp (r.y, -1.0, 1.0)) * 0.31830989); }
+vec3 envColorLod (vec3 r, float lod)
+{
+    if (uEnvMix > 0.5)
+    {
+        vec2 uv = all (equal (r, gR)) ? gEnvUv : envUv (r);
+        vec3 e = textureLod (uEnv, uv, lod).rgb;
+        return e * e * uEnvRange * gSpecOcc;
+    }
+    return envAnalytic (r) * gSpecOcc;
+}
+vec3 envColor (vec3 r) { return envColorLod (r, 0.5); }   // (sharp: a wet world, no haze)
+
+vec3 envAnalytic (vec3 r)
 {
     float t = clamp (r.y * 0.5 + 0.5, 0.0, 1.0);
     vec3 c = mix (groundCol, skyCol, smoothstep (0.30, 0.75, t));
@@ -140,7 +216,7 @@ float windowBeam (vec3 world)
     b += 0.65 * smoothstep (1.25, 0.45, abs (across - 2.85));
 
     // Haze: light scattered around the shafts
-    float spill = 0.18 * smoothstep (3.2, 1.0, abs (across - 0.35));
+    float spill = 0.05 * smoothstep (3.2, 1.0, abs (across - 0.35));   // (clear air: little haze)
     return clamp (b + spill, 0.0, 1.6);
 }
 )GLSL";
@@ -166,12 +242,73 @@ void main()
     vec3 amb  = mix (groundCol, skyCol, N.y * 0.5 + 0.5) * (0.58 + 0.42 * clamp (beam, 0.0, 1.0));
     float fill = max (dot (N, normalize (vec3 (0.75, 0.35, 0.9))), 0.0) * (0.12 + 0.16 * clamp (beam, 0.0, 1.0));
     vec3 R = reflect (-V, N);
+    // The room's own light, from all around (per vertex), and the baked light map: ambient occlusion and
+    // the key light's soft shadow, traced once on the CPU against what stands on the panel - one fetch
+    if (uShOn > 0.5)
+        amb = vShAmb * (0.58 + 0.42 * clamp (beam, 0.0, 1.0));
+    float keyVis = 1.0;
+    if (uOccMapOn > 0.5)
+    {
+        vec2 m = textureLod (uOccMap, vOccUv, 0.0).rg;
+        gAo = mix (1.0, m.r, vOccFlat) * vPlateAo;
+        keyVis = mix (1.0, m.g, vOccFlat);
+    }
+    gAo = clamp (gAo, 0.0, 1.0);
+    if (gAo < 0.999)
+    {
+        // Reflections: the occlusion's share (Lagarde 2014's specular occlusion, in a cheap fit)
+        gSpecOcc = clamp (gAo * (1.0 + 0.6 * ndv * (1.0 - gAo)), 0.0, 1.0);
+        amb *= gAo + clamp (uBaseColor, 0.0, 1.0) * (gAo * (1.0 - gAo));   // (light bounced back by bright surfaces)
+        fill *= gAo;
+    }
+    lightCol *= mix (1.0, keyVis, 0.85);   // (the window is big: its shadows never go fully black)
+    if (uBounceWood.r + uBounceWood.g + uBounceWood.b > 0.0)
+    {
+        // One bounce, in closed form: a big lit surface nearby throws its colour onto whatever faces it,
+        // fading with distance. The two walnut cheeks warm the units' edges and knob flanks facing them;
+        // the floor warms what faces down. No rays, no extra passes: a few multiplies per pixel.
+        float dl = max (vWorld.x + uBounceGeo.x, 0.0), dr = max (uBounceGeo.x - vWorld.x, 0.0);
+        float side = max (N.x, 0.0) * exp (-dl / uBounceGeo.z) + max (-N.x, 0.0) * exp (-dr / uBounceGeo.z);
+        float floorB = max (-N.y, 0.0) * exp (-max (vWorld.y - uBounceGeo.y, 0.0) / uBounceGeo.w);
+        amb += (uBounceWood * side + uBounceFloor * floorB) * gAo;
+    }
+    if (uEnvMix > 0.5)
+    {
+        gR = R;
+        gEnvUv = envUv (R);
+    }
 
     vec3 col = vec3 (0.0);
     float alpha = 1.0;
 )GLSL";
 
     static const char* const postProcess = R"GLSL(
+    if (uCoat > 0.0)
+    {
+        // Clear coat: a smooth wet / lacquered layer over whatever is under it. It mirrors the room
+        // sharply, faintly face-on and strongly at grazing angles (Schlick's Fresnel, n = 1.5), and
+        // the key light shows in it as a tight, bright glint - what makes a surface look wet.
+        float fc = 0.04 + 0.96 * pow (1.0 - ndv, 5.0);
+        // Real lacquer isn't perfect: faint smudges and wipe marks blur the mirror here and there, so
+        // reflections break up as they cross a surface instead of sliding over it like a sticker
+        vec3 wp = vWorld * 7.0;
+        float smudge, wipe;
+        if (uSmudgeOn > 0.5)
+        {
+            vec2 sw = texture (uSmudge, (wp.xy + wp.z * 0.7) * (1.0 / 16.0)).rg;   // baked: one fetch
+            smudge = sw.r;
+            wipe = sw.g;
+        }
+        else
+        {
+            smudge = valueNoise (wp.xy + wp.z * 0.7) * 0.6 + valueNoise (wp.xy * 3.1 - wp.z) * 0.4;
+            wipe = valueNoise (vec2 (wp.x * 0.35 + wp.y * 1.9, wp.z * 2.0));
+        }
+        // (only a trace of it now: the coat reads as still water, a mirror with no haze)
+        float blur = uCoatLod + 0.30 * smoothstep (0.6, 0.95, smudge) + 0.12 * smoothstep (0.7, 0.98, wipe);
+        col = col * (1.0 - fc * uCoat) + envColorLod (R, blur) * (fc * uCoat) * (1.0 - 0.04 * smoothstep (0.6, 0.95, smudge));
+        col += lightCol * (pow (ndh, 1400.0) * 5.0 + pow (ndh, 300.0) * 0.35) * uCoat;
+    }
     col = col * (1.0 + col / 4.0) / (1.0 + col);
     vec2 sp = gl_FragCoord.xy / uViewport - 0.5;
     col *= 1.0 - uVignette * 0.34 * pow (length (sp) * 1.25, 2.4);
@@ -189,6 +326,109 @@ void main()
             p0 += d; p1 += d; p2 += d;
             return fractF ((p0 + p1) * p2);
         }
+    }
+
+    std::vector<unsigned char> bakePanelOcclusion (int w, int h, float x0, float z0, float width, float height,
+                                                   const OccluderSphere* spheres, int count, const float light[3])
+    {
+        // Exact sphere occlusion and a sphere's soft shadow (Quilez), for a point on the face (normal +y)
+        auto occlusion = [] (float px, float py, float pz, const OccluderSphere& s)
+        {
+            const float dx = s.x - px, dy = s.y - py, dz = s.z - pz;
+            const float l = std::sqrt (dx * dx + dy * dy + dz * dz);
+            const float h = l / s.r;
+            if (h < 1.02f) return 0.6f;   // right under it (hidden; a bezel or button top lying there: in shade)
+            const float nl = dy / l, h2 = h * h, k2 = 1.0f - h2 * nl * nl;
+            float res = std::max (0.0f, nl) / h2;
+            if (k2 > 0.001f)
+            {
+                res = nl * std::acos (std::clamp (-nl * std::sqrt ((h2 - 1.0f) / std::max (1.0f - nl * nl, 1.0e-4f)), -1.0f, 1.0f))
+                      - std::sqrt (k2 * (h2 - 1.0f));
+                res = res / h2 + std::atan (std::sqrt (k2 / (h2 - 1.0f)));
+                res *= 0.31830989f;
+            }
+            return std::clamp (res, 0.0f, 1.0f);
+        };
+        auto softShadow = [] (float ox, float oy, float oz, const float* rd, const OccluderSphere& s, float k)
+        {
+            const float cx = ox - s.x, cy = oy - s.y, cz = oz - s.z;
+            const float b = cx * rd[0] + cy * rd[1] + cz * rd[2];
+            const float c = cx * cx + cy * cy + cz * cz - s.r * s.r;
+            const float hh = b * b - c;
+            const float d = std::sqrt (std::max (0.0f, s.r * s.r - hh)) - s.r;
+            const float t = -b - std::sqrt (std::max (hh, 0.0f));
+            if (t < 0.0f) return 1.0f;
+            auto smooth = [] (float e0, float e1, float x) { const float q = std::clamp ((x - e0) / (e1 - e0), 0.0f, 1.0f); return q * q * (3.0f - 2.0f * q); };
+            const float fade = smooth (3.0f * s.r, 0.8f * s.r, t);
+            const float sh = t > 1.0e-5f ? smooth (0.0f, 1.0f, 2.5f * k * d / t) : 0.0f;
+            return 1.0f + (sh - 1.0f) * fade;
+        };
+
+        std::vector<unsigned char> out ((size_t) (w * h * 4), 255);
+        for (int j = 0; j < h; ++j)
+        {
+            const float pz = z0 + height * ((float) j + 0.5f) / (float) h;
+            for (int i = 0; i < w; ++i)
+            {
+                const float px = x0 + width * ((float) i + 0.5f) / (float) w, py = 0.0005f;
+                float ao = 1.0f, key = 1.0f;
+                for (int n = 0; n < count; ++n)
+                {
+                    const auto& s = spheres[n];
+                    const float dx = s.x - px, dz = s.z - pz;
+                    if (dx * dx + dz * dz > 49.0f * s.r * s.r)
+                        continue;   // beyond seven radii: nothing to see
+                    ao *= 1.0f - occlusion (px, py, pz, s);
+                    key = std::min (key, softShadow (px, py, pz, light, s, 3.0f));
+                }
+                auto* o = out.data() + ((size_t) j * (size_t) w + (size_t) i) * 4;
+                o[0] = (unsigned char) std::lround (std::clamp (ao, 0.0f, 1.0f) * 255.0f);
+                o[1] = (unsigned char) std::lround (std::clamp (key, 0.0f, 1.0f) * 255.0f);
+            }
+        }
+        return out;
+    }
+
+    std::array<float, 27> shIrradianceUniforms (const unsigned char* rgba, int width, int height, float range,
+                                                float meanLuma) noexcept
+    {
+        // Real spherical harmonics up to l = 2 in the shader's order (shIrradiance): their constants,
+        // and the cosine lobe's per band (pi, 2 pi / 3, pi / 4), over pi: irradiance as radiance
+        constexpr float k[9] { 0.282095f, 0.488603f, 0.488603f, 0.488603f, 1.092548f, 1.092548f, 0.315392f, 1.092548f, 0.546274f };
+        constexpr float band[9] { 1.0f, 2.0f / 3.0f, 2.0f / 3.0f, 2.0f / 3.0f, 0.25f, 0.25f, 0.25f, 0.25f, 0.25f };
+        constexpr float pi = 3.14159265f;
+        double L[9][3] {};
+        for (int j = 0; j < height; ++j)
+        {
+            const float theta = pi * ((float) j + 0.5f) / (float) height;   // 0 = straight up
+            const float y = std::cos (theta), st = std::sin (theta);
+            const double dOmega = (2.0 * pi / width) * (pi / height) * st;
+            for (int i = 0; i < width; ++i)
+            {
+                const float phi = 2.0f * pi * (((float) i + 0.5f) / (float) width - 0.5f);
+                const float x = st * std::sin (phi), z = st * std::cos (phi);
+                const float p[9] { 1.0f, y, z, x, x * y, y * z, 3.0f * z * z - 1.0f, x * z, x * x - y * y };
+                const unsigned char* px = rgba + ((size_t) j * (size_t) width + (size_t) i) * 4;
+                float c[3];
+                for (int ch = 0; ch < 3; ++ch) { const float e = px[ch] / 255.0f; c[ch] = e * e * range; }
+                for (int b = 0; b < 9; ++b)
+                    for (int ch = 0; ch < 3; ++ch)
+                        L[b][ch] += (double) c[ch] * k[b] * p[b] * dOmega;
+            }
+        }
+        std::array<float, 27> out {};
+        for (int b = 0; b < 9; ++b)
+            for (int ch = 0; ch < 3; ++ch)
+                out[(size_t) (b * 3 + ch)] = (float) L[b][ch] * band[b] * k[b];
+        if (meanLuma > 0.0f)
+        {
+            // The average over every direction is the constant term alone (the others average to zero)
+            const float luma = 0.2126f * out[0] + 0.7152f * out[1] + 0.0722f * out[2];
+            if (luma > 1.0e-6f)
+                for (auto& v : out)
+                    v *= meanLuma / luma;
+        }
+        return out;
     }
 
     std::array<float, 15> wearUniforms (float seed, float scale) noexcept
@@ -239,9 +479,11 @@ void main()
     vec2 p = vLocal.xz;
     vec4 d = texture (uTex, (p - uParams.xy) / uParams.zw);
     float brush = (hash12 (vec2 (floor (p.y * 2600.0), floor (p.x * 40.0))) - 0.5) * noiseAA (fwidth (p.y * 2600.0));
-    vec3 panel = vec3 (0.085, 0.089, 0.098) * (1.0 + brush * 0.10);
+    vec3 panel = (uParams2.x > 0.0 ? uBaseColor : vec3 (0.085, 0.089, 0.098)) * (1.0 + brush * 0.10);   // uParams2.x > 0: its own shade
     panel = mix (panel, vec3 (0.118, 0.123, 0.134), d.b * 0.85);
     vec3 albedo = mix (panel, vec3 (0.46, 0.48, 0.52), d.g);
+    if (uParams2.z > 0.5)
+        albedo = mix (albedo, vec3 (0.10, 0.32, 0.78), d.a);   // uParams2.z: this print has blue pinstripes in its alpha
     albedo = mix (albedo, vec3 (0.90, 0.91, 0.92), d.r);
     float wear = wearMarks (p, uParams2.w, 1.0);
     float edgeWear = smoothstep (0.72, 1.0, abs (p.y) / max (uParams.w * 0.5, 0.001)) * 0.5
@@ -258,15 +500,25 @@ void main()
     vec2 p = vLocal.xz;
     float print = texture (uTex, (p - uParams.xy) / uParams.zw).r;
     float flake = (hash12 (floor (p * 1400.0)) - 0.5) * noiseAA (length (fwidth (p * 1400.0)));
-    vec3 albedo = mix (uBaseColor * (1.0 + flake * 0.06), vec3 (0.93, 0.92, 0.95), print);
+    // uParams2.y > 0.5: dark ink (a light-painted panel); uParams2.z: hammertone - the dimpled, mottled
+    // finish of old broadcast gear: slow bumps in the paint that shade and catch the light
+    vec3 ink = uParams2.y > 0.5 ? vec3 (0.045, 0.045, 0.05) : vec3 (0.93, 0.92, 0.95);
+    float hammer = 0.0;
+    if (uParams2.z > 0.0)
+    {
+        vec2 hp = p * 55.0;
+        float hAA = clamp (1.0 - length (fwidth (hp)) * 0.35, 0.0, 1.0);
+        hammer = (valueNoise (hp) * 0.65 + valueNoise (hp * 2.3 + 7.1) * 0.35 - 0.5) * uParams2.z * hAA;
+    }
+    vec3 albedo = mix (uBaseColor * (1.0 + flake * 0.06) * (1.0 + hammer * 0.55), ink, print);
     float wear = wearMarks (p, uParams2.w + 3.0, 1.0);
     float dust = patina (p * 3.0) * 0.5 + 0.5;
-    albedo = mix (albedo, albedo * 1.25 + vec3 (0.015), wear * 0.40);
-    col  = albedo * (amb * 0.70 + wrap * lightCol * 0.85 + fill) * (0.95 + 0.08 * dust);
+    albedo = mix (albedo, albedo * 1.25 + vec3 (0.015), wear * (uParams2.z > 0.0 ? 0.12 : 0.40));
+    col  = albedo * (amb * 0.70 + wrap * lightCol * 0.85 + fill) * (0.95 + 0.08 * dust * (uParams2.z > 0.0 ? 0.25 : 1.0));   // a clean hammertone: barely any grime
     float coat = (1.0 - print * 0.4) * (1.0 - wear * 0.35);
-    col += lightCol * (pow (ndh, 180.0) * 0.55 + pow (ndh, 24.0) * 0.06) * coat;
+    col += lightCol * (pow (ndh, 180.0) * 0.55 + pow (ndh, 24.0) * 0.06) * coat * (1.0 + hammer * 1.6);
     col += envColor (R) * (0.04 + 0.32 * pow (facing, 5.0)) * coat;
-    col += vec3 (0.55, 0.40, 0.95) * pow (facing, 3.0) * 0.10 * coat;
+    col += uBaseColor * pow (facing, 3.0) * 0.12 * coat;   // the paint's own colour at grazing angles
     col += vec3 (1.0, 0.97, 0.92) * wear * pow (ndh, 20.0) * 0.25;
 )GLSL" };
 
@@ -460,7 +712,8 @@ void main()
 
     // Card: warm, slightly uneven, darker toward the corners the way a real dial ages
     float grain = valueNoise (uv * 90.0) * 0.5 + valueNoise (uv * 240.0) * 0.5;
-    vec3 card = vec3 (0.94, 0.90, 0.78) * (0.94 + 0.10 * grain);
+    // (uBaseColor tints the card: (0.92, 0.89, 0.80) is the plain cream; an amber-lit dial passes its own)
+    vec3 card = vec3 (0.94, 0.90, 0.78) * (uBaseColor / vec3 (0.92, 0.89, 0.80)) * (0.94 + 0.10 * grain);
     card *= 1.0 - 0.22 * smoothstep (0.45, 1.05, length ((uv - 0.5) * vec2 (1.35, 1.8)));
     card = mix (card * 0.93, card, smoothstep (0.0, 0.35, uv.y));
 

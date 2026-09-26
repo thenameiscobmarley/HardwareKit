@@ -19,8 +19,12 @@ namespace hwk::models
             int ribs; float ribDepth; float ribSharp;                 // grip carving (0 ribs = smooth)
             float skirtR; Vec3 skirtColour; bool skirtMetal; int skirtKnurl;   // skirt (0 = none)
             float capR; int capMaterial; Vec3 capColour; bool capDome;        // cap: 0 plastic, 1 metal, 2 unit accent (anodised), 3 fixed colour metal
-            enum Pointer { line, dot, notch, bar, skirtLine, wing } pointer;
+            enum Pointer { line, dot, notch, bar, skirtLine, wing, sideLine } pointer;
             Vec3 pointerColour;
+            float gloss = 1.0f;              // body: 1 glossy .. 0 matte
+            float collarR = 0.0f;            // a metal collar under the body (x r, 0 = none), its height x r
+            float collarH = 0.0f;
+            bool setScrew = false;           // a grub screw in the collar's side
         };
 
         constexpr Vec3 black   { 0.030f, 0.030f, 0.033f }, darkGrey { 0.10f, 0.10f, 0.11f }, grey { 0.30f, 0.31f, 0.33f };
@@ -90,6 +94,22 @@ namespace hwk::models
             { "Amber instrument",     R::cylinder, 1.00f, 1, darkGrey, false, 0, false, 36, 0.022f, 0.30f, 0, none, false, 0, 0.50f, 3, amber, false, R::line, white },
             { "Oxblood instrument",   R::cylinder, 1.00f, 1, darkGrey, false, 0, false, 36, 0.022f, 0.30f, 0, none, false, 0, 0.50f, 3, oxblood, false, R::line, white },
 
+            // Classic studio gear, matched to photographs (ALL KNOBS.png)
+            //   name                  shape        h      top    body          metal pol  brush ribs depth  sharp skirtR skirt col  sm  kn  capR mat cap        dome pointer      colour gloss collarR collarH screw
+            { "Program EQ top hat",   R::taper,    1.05f, 0.80f, black,        false, 0, false, 11, 0.090f, 0.12f, 1.45f, black, false, 0, 0.0f, 0, none, false, R::sideLine, cream, 1.00f, 0.0f, 0.0f, false },
+            { "FET knurled silver",   R::cylinder, 0.72f, 1,     alu,          true, 0.50f, true, 110, 0.018f, 1.00f, 0, none, false, 0, 0.0f, 0, none, false, R::notch, ink, 1.0f, 0.62f, 0.22f, false },
+            { "Optical fluted",       R::taper,    1.25f, 0.70f, black,        false, 0, false, 12, 0.075f, 0.18f, 1.36f, black, false, 0, 0.0f, 0, none, false, R::sideLine, white, 1.00f, 0.0f, 0.0f, false },
+            { "Small ribbed",         R::cylinder, 1.00f, 1,     rubber,       false, 0, false, 28, 0.026f, 0.55f, 0, none, false, 0, 0.0f, 0, none, false, R::sideLine, white, 0.30f, 0.0f, 0.0f, false },
+            { "Channel matte black",  R::barrel,   1.00f, 1,     anodBlack,    false, 0, false, 0, 0, 0, 0, none, false, 0, 0.0f, 0, none, false, R::sideLine, white, 0.15f, 0.72f, 0.20f, false },
+            { "Channel red trim",     R::cylinder, 1.00f, 1,     capRed,       true, 0.35f, true, 40, 0.012f, 0.80f, 0, none, false, 0, 0.0f, 0, none, false, R::sideLine, white, 1.0f, 0.72f, 0.20f, false },
+            { "Vintage maroon",       R::taper,    0.85f, 0.88f, oxblood,      false, 0, false, 48, 0.012f, 0.60f, 1.35f, oxblood, false, 0, 0.0f, 0, none, false, R::line, white, 0.85f, 0.0f, 0.0f, false },
+            { "Vintage dark grey",    R::taper,    0.90f, 0.78f, gunmetal,     false, 0, false, 36, 0.020f, 0.50f, 1.30f, gunmetal, false, 0, 0.0f, 0, none, false, R::line, white, 0.60f, 0.0f, 0.0f, false },
+            { "Vintage small grey",   R::taper,    0.95f, 0.80f, grey,         false, 0, false, 24, 0.022f, 0.45f, 1.22f, darkGrey, false, 0, 0.0f, 0, none, false, R::line, white, 0.60f, 0.0f, 0.0f, false },
+            { "500 blue cap",         R::cylinder, 1.30f, 1,     darkGrey,     false, 0, false, 40, 0.014f, 0.70f, 0, none, false, 0, 0.92f, 3, capBlue, true, R::line, white, 0.40f, 0.70f, 0.22f, true },
+            { "500 red cap",          R::cylinder, 1.30f, 1,     darkGrey,     false, 0, false, 40, 0.014f, 0.70f, 0, none, false, 0, 0.92f, 3, capRed, true, R::line, white, 0.40f, 0.70f, 0.22f, true },
+            { "500 white cap",        R::cylinder, 1.30f, 1,     darkGrey,     false, 0, false, 40, 0.014f, 0.70f, 0, none, false, 0, 0.92f, 3, capWhite, true, R::line, ink, 0.40f, 0.70f, 0.22f, true },
+            { "Mastering ribbed",     R::taper,    1.00f, 0.84f, black,        false, 0, false, 30, 0.028f, 0.55f, 1.20f, black, false, 0, 0.0f, 0, none, false, R::sideLine, white, 0.55f, 0.0f, 0.0f, false },
+
         };
         static_assert (sizeof (recipes) / sizeof (recipes[0]) == (size_t) KnobStyle::count - (size_t) KnobStyle::consoleAccent,
                        "one recipe per recipe style");
@@ -140,7 +160,9 @@ namespace hwk::models
         Model m;
         const int seg = segmentsFor (detail);
         const bool carved = detail >= 2;
-        const float skirtH = k.skirtR > 0.0f ? 0.016f : 0.0f;
+        // A metal collar the body sits on (the shaft clamp of machined and modern knobs)
+        const float collarH = k.collarR > 0.0f ? k.collarH * r : 0.0f;
+        const float skirtH = (k.skirtR > 0.0f ? 0.016f : 0.0f) + collarH;
         const float h = k.height * r;
         const float c = std::min (0.012f, 0.15f * r);
         const float y0 = skirtH;
@@ -188,13 +210,33 @@ namespace hwk::models
         if (carved && k.ribs > 0)
             grip = { k.ribs, k.ribDepth, bandFrom, std::max (bandFrom + 0.005f, bandTo), 0.004f, k.ribSharp };
 
+        if (collarH > 0.0f)
+        {
+            Part collar { lathe (k.collarR * r, { { 0.0f, 0.0f }, { 0.0f, collarH - 0.002f }, { -0.002f, collarH } }, seg, true),
+                          Role::metal, true, { 0.62f, 0.62f, 0.64f } };
+            collar.polish = 0.55f;
+            m.parts.push_back (std::move (collar));
+            if (k.setScrew)   // its grub screw, a dark hex socket in the side
+                m.parts.push_back ({ geo::box ({ -0.006f, 0.35f * collarH, k.collarR * r - 0.001f }, { 0.006f, 0.75f * collarH, k.collarR * r + 0.0015f }),
+                                     Role::body, true, { 0.02f, 0.02f, 0.02f } });
+        }
+
         if (k.skirtR > 0.0f)
         {
             Relief knurl;
             if (carved && k.skirtKnurl > 0)
                 knurl = { k.skirtKnurl, 0.012f, 0.003f, skirtH - 0.003f, 0.002f, 0.9f };
-            Part skirt { lathe (k.skirtR * r, { { 0.0f, 0.0f }, { 0.0f, skirtH - 0.004f }, { -0.003f, skirtH }, { -(k.skirtR - 1.0f) * r, skirtH } }, seg, false, knurl),
-                         k.skirtMetal ? Role::metal : Role::body, true, k.skirtColour };
+            // Metal skirts stay flat (machined). Moulded ones are shaped like the real thing: a thin rounded
+            // rim at the edge, then a smooth slope rising into the body - it catches the light all round
+            // instead of reading as a flat washer
+            const float w = (k.skirtR - 1.0f) * r;
+            const float sb = skirtH - collarH;   // the skirt's own thickness
+            std::vector<ProfilePoint> skirtProf = k.skirtMetal
+                ? std::vector<ProfilePoint> { { 0.0f, collarH }, { 0.0f, skirtH - 0.004f }, { -0.003f, skirtH }, { -w, skirtH } }
+                : std::vector<ProfilePoint> { { 0.0f, collarH }, { 0.0f, collarH + 0.45f * sb }, { -0.0025f, collarH + 0.80f * sb },
+                                              { -0.0060f, collarH + sb }, { -0.012f, collarH + 0.95f * sb },
+                                              { -0.45f * w, collarH + sb + 0.10f * r }, { -0.80f * w, collarH + sb + 0.20f * r }, { -w, collarH + sb + 0.24f * r } };
+            Part skirt { lathe (k.skirtR * r, skirtProf, seg, false, knurl), k.skirtMetal ? Role::metal : Role::body, true, k.skirtColour };
             skirt.polish = 0.5f;
             skirt.brushedRings = k.skirtMetal;
             m.parts.push_back (std::move (skirt));
@@ -202,6 +244,7 @@ namespace hwk::models
 
         Part body { lathe (r, prof, seg, true, grip), k.bodyMetal ? Role::metal : Role::body, true, k.bodyColour };
         body.polish = k.polish;
+        body.gloss = k.gloss;
         body.brushedRings = k.brushed;
         if (! carved && k.ribs > 0 && ! k.bodyMetal)
         {
@@ -257,6 +300,19 @@ namespace hwk::models
                 m.shadowRadius = r;
                 m.beakLength = len;
                 m.beakHalfWidth = w;
+                break;
+            }
+            case KnobRecipe::sideLine:
+            {
+                // Painted on: across the top from near the centre to the edge, then down the flank to the
+                // base (or the skirt) - how most studio knobs are marked
+                m.parts.push_back ({ geo::box ({ -0.0055f, py - 0.0012f, -(topR - 0.002f) }, { 0.0055f, py + 0.0012f, -topR * 0.22f }), Role::pointer, true, k.pointerColour });
+                const float lift = 0.0018f + (carved ? 0.0f : 0.0f);
+                const float bottomY = y0 + 0.03f * h, bottomR = r + lift + (k.ribs > 0 ? 0.0f : 0.0f);
+                MeshData side;
+                side.append (geo::quad ({ -0.0055f, bottomY, -bottomR }, { 0.0055f, bottomY, -bottomR },
+                                        { 0.0055f, topY - 0.003f, -(topR + lift) }, { -0.0055f, topY - 0.003f, -(topR + lift) }));
+                m.parts.push_back ({ std::move (side), Role::pointer, true, k.pointerColour });
                 break;
             }
             case KnobRecipe::wing:
@@ -479,7 +535,7 @@ namespace hwk::models
     }
 
     //==============================================================================
-    Model vuMeter (float halfW, float halfH, float depth, Vec3 bezelColour)
+    Model vuMeter (float halfW, float halfH, float depth, Vec3 bezelColour, bool flush)
     {
         Model m;
         m.footprintRadius = std::max (halfW, halfH);
@@ -513,6 +569,19 @@ namespace hwk::models
                                       { { 0.0f, -depth + 0.004f }, { 0.0f, -depth + 0.012f }, { -halfH * 0.07f, -depth + 0.018f } }, true),
                     gfx::Mat4::translation ({ 0.0f, 0.0f, pivotDrop }));
         m.parts.push_back ({ std::move (hub), Role::body, false, { 0.13f, 0.13f, 0.15f } });
+
+        if (flush)
+        {
+            /*  Flush: no bezel. The glass sits in the panel's own cut-out, a hair below its surface, held
+                by a thin black gasket - the way modern studio gear seats its meters. */
+            MeshData gasket;
+            gasket.append (geo::wellWalls ({ 0.0f, 0.0f, halfW + 0.004f, halfH + 0.004f }, 0.0f, 0.006f));
+            gasket.append (geo::plateWithHoles ({ 0.0f, 0.0f, halfW + 0.004f, halfH + 0.004f }, -0.006f, { window }));
+            m.parts.push_back ({ std::move (gasket), Role::body, false, { 0.012f, 0.012f, 0.014f } });
+            m.parts.push_back ({ geo::horizontalQuad ({ 0.0f, 0.0f, halfW + 0.003f, halfH + 0.003f }, -0.003f),
+                                 Role::glass, false, { 0.60f, 0.64f, 0.70f } });
+            return m;
+        }
 
         // Bezel: a metal frame standing slightly proud of the panel
         constexpr float rc = 0.016f;

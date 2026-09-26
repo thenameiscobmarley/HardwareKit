@@ -70,6 +70,8 @@ namespace hwk::gfx
         void set (const char* name, float a, float b, float c, float d);
         void set (const char* name, const Mat4& m);
         void setArray (const char* name, const float* values, int count);
+        void setArray3 (const char* name, const float* xyz, int count);    // vec3[count]
+        void setArray4 (const char* name, const float* xyzw, int count);   // vec4[count]
 
     private:
         GLuint program = 0;
