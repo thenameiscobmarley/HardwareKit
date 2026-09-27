@@ -86,6 +86,9 @@ namespace hwk::gfx
 
         /** channels: 1 (R8) or 4 (RGBA8). */
         void upload (const juce::uint8* data, int width, int height, int channels, bool mipmaps, int anisotropy);
+        /** Replaces a rectangle of an uploaded texture (`data`: that rectangle's rows, tightly packed, in the
+            texture's channels) - for a small live area of a big baked texture. Mipmaps are rebuilt if it has them. */
+        void updateRegion (const juce::uint8* data, int x, int y, int width, int height);
         void bind (int unit) const;
         void release();
 
@@ -94,6 +97,7 @@ namespace hwk::gfx
     private:
         GLuint id = 0;
         int w = 0, h = 0, ch = 0;
+        bool mips = false;
     };
 
     /** Off-screen colour + depth target (single sample), e.g. for re-rendering a zoomed view of the scene. */

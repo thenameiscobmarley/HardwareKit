@@ -163,6 +163,17 @@ namespace hwk::gfx
     void ShaderProgram::setArray4 (const char* n, const float* v, int count) { glUniform4fv (uniform (n), count, v); }
 
     //==============================================================================
+    void Texture2D::updateRegion (const juce::uint8* data, int x, int y, int width, int height)
+    {
+        if (id == 0 || width <= 0 || height <= 0 || x < 0 || y < 0 || x + width > w || y + height > h)
+            return;
+        glBindTexture (GL_TEXTURE_2D, id);
+        glPixelStorei (GL_UNPACK_ALIGNMENT, 1);
+        glTexSubImage2D (GL_TEXTURE_2D, 0, x, y, width, height, ch == 1 ? (GLenum) GL_RED : (GLenum) GL_RGBA, GL_UNSIGNED_BYTE, data);
+        if (mips)
+            glGenerateMipmap (GL_TEXTURE_2D);
+    }
+
     void Texture2D::upload (const juce::uint8* data, int width, int height, int channels, bool mipmaps, int anisotropy)
     {
         const bool sameShape = (id != 0 && width == w && height == h && channels == ch);
@@ -173,7 +184,7 @@ namespace hwk::gfx
             glGenTextures (1, &id);
         }
 
-        w = width; h = height; ch = channels;
+        w = width; h = height; ch = channels; mips = mipmaps;
 
         glBindTexture (GL_TEXTURE_2D, id);
         glPixelStorei (GL_UNPACK_ALIGNMENT, 1);
