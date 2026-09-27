@@ -110,6 +110,10 @@ namespace hwk::models
             { "500 white cap",        R::cylinder, 1.30f, 1,     darkGrey,     false, 0, false, 40, 0.014f, 0.70f, 0, none, false, 0, 0.92f, 3, capWhite, true, R::line, ink, 0.40f, 0.70f, 0.22f, true },
             { "Mastering ribbed",     R::taper,    1.00f, 0.84f, black,        false, 0, false, 30, 0.028f, 0.55f, 1.20f, black, false, 0, 0.0f, 0, none, false, R::sideLine, white, 0.55f, 0.0f, 0.0f, false },
 
+            // Made in the Rack Unit Designer's knob maker ("Grey Ribbed Khris", TAKEBACK): a tall dark metal
+            // cylinder, 28 shallow ribs, a thin grey metal skirt, a cream line
+            { "Grey ribbed metal",    R::cylinder, 1.50f, 0.92f, { 0.22f, 0.22f, 0.22f }, true, 0.40f, false, 28, 0.020f, 0.55f, 1.05f, { 0.39f, 0.39f, 0.41f }, true, 0, 0.0f, 0, none, false, R::line, cream, 1.0f, 0.0f, 0.0f, false },
+
         };
         static_assert (sizeof (recipes) / sizeof (recipes[0]) == (size_t) KnobStyle::count - (size_t) KnobStyle::consoleAccent,
                        "one recipe per recipe style");

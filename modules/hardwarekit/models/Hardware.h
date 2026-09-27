@@ -82,6 +82,8 @@ namespace hwk::models
         // the 500-series coloured caps, the passive mastering EQ's ribbed pointer
         pultecTopHat, fetSilver, la2aFluted, smallRibbed, porticoBlack, porticoRed,
         neveMaroon, neveGrey, neveSmallGrey, apiBlue, apiRed, apiWhite, manleyRibbed,
+        // Made in the ENH Master Rack Unit Designer (its knob maker): TAKEBACK's grey ribbed metal
+        greyRibbedMetal,
         count
     };
 
