@@ -28,6 +28,7 @@
 #include "gfx/GLMath.h"
 #include "gfx/GLResources.h"
 #include "geo/Geometry.h"
+#include "geo/Cable.h"
 #include "models/Hardware.h"
 #include "anim/Animation.h"
 #include "shaders/Materials.h"
