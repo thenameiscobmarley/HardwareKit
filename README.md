@@ -1,6 +1,6 @@
 # HardwareKit
 
-Shared JUCE module for Khris Audio plugin UIs rendered as real-looking 3D hardware.
+Shared JUCE module for ENH Audio plugin UIs rendered as real-looking 3D hardware.
 
 ```cmake
 set(HARDWAREKIT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../HardwareKit" CACHE PATH "HardwareKit checkout")

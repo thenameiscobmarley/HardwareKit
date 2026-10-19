@@ -2,7 +2,7 @@
  BEGIN_JUCE_MODULE_DECLARATION
 
   ID:                 hardwarekit
-  vendor:             khrisaudio
+  vendor:             enhaudio
   version:            1.0.0
   name:               HardwareKit
   description:        3D hardware models (knob styles, buttons, toggles, lamps, racks), materials,
